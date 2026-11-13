@@ -32,6 +32,8 @@ struct OnboardingView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             note("person.crop.circle.badge.checkmark",
                                  "新版 QQ音乐下载的歌（列表里标着 musicex）密钥不在文件里，需要这台 Mac 上登录过 QQ音乐（不用开着）。")
+                            note("lock.shield",
+                                 "QQ音乐如果是从 App Store 安装的，需要在「系统设置 → 隐私与安全性 → 完全磁盘访问权限」里打开 TuneFree（需要时 App 顶部会提示，点一下就能跳过去）。")
                             note("network",
                                  "会连 QQ音乐官方接口取这类歌的密钥，并按歌曲 ID 补全封面、专辑、歌词；只发「这是哪首歌」，不上传任何歌曲。")
                             note("arrow.triangle.2.circlepath",

@@ -76,6 +76,8 @@ The app isn't notarized, so macOS blocks it the first time: in Applications, **r
 
 **"Can't get key" / "login expired"** — `musicex` files don't carry their key. TuneFree reads QQ Music's local login state and asks QQ Music's official API for that song's key. Log in to QQ Music once, then press "再次转换" (Convert again). Files forwarded from someone else can't be decrypted, because the key is bound to the account that downloaded them.
 
+**QQ Music from the App Store: the permission prompt flashes and disappears, every song fails** — the App Store version is sandboxed, so its songs and login live in its private container, and macOS's "access data from other apps" prompt only lasts as long as the process that asked. Open System Settings → Privacy & Security → **Full Disk Access** and turn TuneFree on (click "+" to add it if it's not listed). TuneFree shows a banner with a direct link when it detects this.
+
 **Does it upload my music?** No. It talks to QQ Music's official API for two things: the key for `musicex` files (required to decrypt), and tag lookup by song ID (cover, album, lyrics; no login). Turn off "联网补全标签" (online tags) under Advanced, or pass `--no-online-tags`, to skip the tag lookup.
 
 ## Build from source

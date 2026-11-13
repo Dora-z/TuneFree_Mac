@@ -14,6 +14,13 @@ struct ContentView: View {
                 TopBar()
                     .frame(height: 52)
 
+                if model.needsFullDiskAccess && !model.fullDiskAccessBannerDismissed && model.phase != .running {
+                    DiskAccessBanner()
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 HStack(alignment: .top, spacing: 18) {
                     mainArea
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -188,5 +195,55 @@ struct LogoMark: View {
             }
             .shadow(color: Theme.accent2.opacity(0.6), radius: s * 0.3)
         }
+    }
+}
+
+/// QQ音乐是 App Store 版、TuneFree 又没有完全磁盘访问权限时的提示条
+struct DiskAccessBanner: View {
+    @Environment(AppModel.self) private var model
+    @State private var openedSettings = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Theme.gold)
+                .frame(width: 38, height: 38)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.gold.opacity(0.14)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("请给 TuneFree 打开「完全磁盘访问权限」")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(openedSettings
+                     ? "在列表里打开 TuneFree 的开关；没有 TuneFree 就点「+」，从「应用程序」里选 TuneFree。开好后回到这里会自动检查。"
+                     : "你的 QQ音乐是 App Store 版，歌曲和登录信息在它的沙盒里。没有这个权限，新版格式的歌会解密失败。")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button("重新检查") { model.refreshDiskAccess() }
+                .buttonStyle(GhostButtonStyle(height: 32))
+            Button {
+                AppModel.openFullDiskAccessSettings()
+                openedSettings = true
+            } label: {
+                Label("打开系统设置", systemImage: "gearshape")
+            }
+            .buttonStyle(PrimaryButtonStyle(tint: LinearGradient(colors: [Theme.gold, Theme.accent3],
+                                                                 startPoint: .topLeading, endPoint: .bottomTrailing),
+                                            height: 32))
+            .frame(width: 140)
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { model.fullDiskAccessBannerDismissed = true }
+            } label: { Image(systemName: "xmark") }
+                .buttonStyle(IconButtonStyle())
+                .help("不再提示（权限状态变化后会再提示）")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.gold.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1))
     }
 }

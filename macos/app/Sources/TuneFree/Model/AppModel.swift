@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import Security
 import SwiftUI
 
 enum OutputMode: String, CaseIterable, Identifiable {
@@ -136,6 +137,73 @@ final class AppModel {
     static let qqCacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac/iQmc")
 
+    // MARK: - 完全磁盘访问权限
+    //
+    // App Store 版 QQ音乐是沙盒 App，歌曲和登录信息都在它的容器里。macOS 对「读别的 App 的数据」
+    // 弹的授权只在发起读取的那个进程活着时有效，而真正读文件的是一闪而过的后端子进程，
+    // 弹窗会跟着子进程一起消失，用户来不及点。完全磁盘访问权限是长期的，也覆盖子进程。
+
+    /// 需要提示用户去开完全磁盘访问权限（QQ音乐是沙盒版，且 TuneFree 还没有这个权限）
+    var needsFullDiskAccess = false
+    var fullDiskAccessBannerDismissed: Bool {
+        didSet { UserDefaults.standard.set(fullDiskAccessBannerDismissed, forKey: "fdaBannerDismissed") }
+    }
+    private var activationObserver: NSObjectProtocol?
+
+    func refreshDiskAccess() {
+        DispatchQueue.global(qos: .utility).async {
+            let need = AppModel.qqMusicIsSandboxed() && !AppModel.hasFullDiskAccess()
+            DispatchQueue.main.async {
+                if need != self.needsFullDiskAccess { self.needsFullDiskAccess = need }
+                // 权限开好了又被关掉，再提示一次
+                if !need { self.fullDiskAccessBannerDismissed = false }
+            }
+        }
+    }
+
+    /// 用一个子进程读只有「完全磁盘访问权限」才能读的系统文件：不会弹窗，
+    /// 而且子进程能立刻反映刚在系统设置里打开的权限（不用重启 TuneFree）。
+    static func hasFullDiskAccess() -> Bool {
+        switch ProcessInfo.processInfo.environment["TUNEFREE_DEBUG_FDA"] {
+        case "0": return false
+        case "1": return true
+        default: break
+        }
+        for (tool, args) in [("/usr/bin/head", ["-c", "1", "/Library/Application Support/com.apple.TCC/TCC.db"]),
+                             ("/bin/ls", [NSHomeDirectory() + "/Library/Safari"])] {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: tool)
+            process.arguments = args
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do { try process.run() } catch { continue }
+            process.waitUntilExit()
+            if process.terminationStatus == 0 { return true }
+        }
+        return false
+    }
+
+    /// 装的 QQ音乐是不是沙盒版（App Store 版）：看它代码签名里的 app-sandbox 权限，不启动它、不弹窗
+    static func qqMusicIsSandboxed() -> Bool {
+        if let forced = ProcessInfo.processInfo.environment["TUNEFREE_DEBUG_QQ_SANDBOX"] { return forced == "1" }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.tencent.QQMusicMac") else {
+            return false
+        }
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return false }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let dict = info as? [String: Any],
+              let entitlements = dict[kSecCodeInfoEntitlementsDict as String] as? [String: Any] else { return false }
+        return entitlements["com.apple.security.app-sandbox"] as? Bool == true
+    }
+
+    static func openFullDiskAccessSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     /// QQ音乐有没有保存自动登录信息：普通版在 ~/Library/Preferences，
     /// 沙盒版（Mac App Store）在自己的容器里。只看有没有 AutoLoginUserInfo，不读内容。
     static func qqLoginDetected() -> Bool {
@@ -170,7 +238,15 @@ final class AppModel {
         }
         hasFFmpeg = BackendLocator.ffmpegPath() != nil
         hasQQLogin = AppModel.qqLoginDetected()
+        fullDiskAccessBannerDismissed = UserDefaults.standard.bool(forKey: "fdaBannerDismissed")
+
         bundled = BackendLocator.isBundled
+        refreshDiskAccess()
+        // 从系统设置切回来时重新检查
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.refreshDiskAccess()
+        }
     }
 
     private func save() {
