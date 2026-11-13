@@ -60,7 +60,7 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 - ⚡ Skips songs already converted; parallel encoding
 - 📋 Live per-track status, failure reasons with suggestions, full log
 - 🌗 Light and dark mode follow the system (or pick one in Settings ⌘,)
-- 🔔 Automatic update check (prompts and downloads the right installer for your chip; turn it off in Settings ⌘,, or check manually via the app menu)
+- 🔔 Automatic update check + **one-click update**: "立即更新" downloads the right installer, verifies it against GitHub's SHA-256, replaces the app and relaunches — no trip to System Settings (turn off auto-check in Settings ⌘,, or check manually via the app menu)
 - 📖 First-launch guide with usage notes and disclaimer, available later from the Help menu
 
 ## Requirements
@@ -71,7 +71,7 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 
 ## First launch
 
-The app isn't notarized, so macOS blocks it the first time: in Applications, **right-click TuneFree → Open → Open**. If it still won't open, go to System Settings → Privacy & Security and click "Open Anyway". You only do this once.
+The app isn't notarized, so macOS blocks it the first time: in Applications, **right-click TuneFree → Open → Open**. If it still won't open, go to System Settings → Privacy & Security and click "Open Anyway". You only do this once — later updates installed with the in-app "立即更新" button (from 2.1.3-mac.12) aren't blocked.
 
 ## FAQ
 

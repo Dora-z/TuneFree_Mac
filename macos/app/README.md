@@ -58,6 +58,9 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run   # �
 | `TUNEFREE_DEBUG_START_AFTER=<秒>` | 载入完成后等多久再自动开始（默认 1.5） |
 | `TUNEFREE_DEBUG_RECORD=<目录>` | 录屏：按 `TUNEFREE_DEBUG_RECORD_FPS`（默认 30）截窗口帧，录 `TUNEFREE_DEBUG_RECORD_SECONDS` 秒后退出，帧时间写在 `frames.txt` |
 | `TUNEFREE_DEBUG_SHOWLOG=1` | 启动时打开日志面板 |
+| `TUNEFREE_DEBUG_UPDATE_DMG=<路径>` | 用本地 DMG 当「新版本」（校验值现场算），测更新 / 回滚 |
+| `TUNEFREE_DEBUG_BREAK_UPDATE=1` | 校验通过后故意弄坏新版，测「新版起不来 → 自动恢复旧版」 |
+| `TUNEFREE_DEBUG_AUTOUPDATE=1` | 发现新版本就直接走一键更新（配合 `TUNEFREE_DEBUG_VERSION` 做端到端测试，建议在 App 的副本上跑） |
 | `-appearanceMode light` / `dark` | 命令行参数：这次运行固定浅色 / 深色（截图对比两种外观用） |
 | `TUNEFREE_DEBUG_ONBOARDING=1` | 强制弹出首次使用说明（调试运行时默认不弹） |
 | `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.1.3-mac.1`） |
@@ -84,7 +87,22 @@ app/
 - **检查更新**（`Model/Updater.swift`）：启动 3 秒后自动查一次、之后每 24 小时一次（设置 ⌘, 里可关，默认开）；
   菜单「TuneFree → 检查更新…」手动查。先问 GitHub API 拿版本和更新说明，API 不通时退回
   `releases/latest` 的跳转拿 tag。版本号按数字逐段比较（`2.1.3-mac.5` → 2,1,3,5），
-  「下载新版本」直接打开对应芯片的 DMG（`TuneFree-<版本>-arm64|x86_64.dmg`），所以发布时要保持这个命名。
+  「立即更新」（`Model/UpdateInstaller.swift`）由 App 自己下载对应芯片的 DMG（`TuneFree-<版本>-arm64|x86_64.dmg`，
+  发布时要保持这个命名）→ 用 GitHub API 返回的资产 `digest`（SHA-256）校验 → 挂载并拷出 App，检查签名
+  （`codesign --strict`）、包名、版本、架构 → `replaceItemAt` 替换当前 App → 等自己退出后 `open` 新版本。
+  App 自己下载的文件没有隔离标记，所以不会被 Gatekeeper 拦；正因为绕过了这一层，上面任何一步不通过都不安装，
+  改为提示「手动下载」。从「下载」位置直接运行（App Translocation）或目录不可写时也只能手动更新。
+  - **不留垃圾**：所有临时文件都在 `~/Library/Caches/TuneFree/update/<随机名>/`，DMG 解出 App 后立刻删；
+    成功、失败、取消、回滚都会卸载挂载的 DMG 并删掉整个目录；下载走不落盘缓存的会话；
+    启动时还会清理 15 分钟前因崩溃 / 断电中断留下的目录。
+  - **失败自动回滚**：旧版先挪到备份（不删），换上新版后由一个小脚本等当前进程退出、打开新版
+    （环境变量里的 `TUNEFREE_DEBUG_*` 会被去掉）；新版启动时看到 `pending` 就写 `healthy` 报到。
+    25 秒内没报到（崩溃 / 打不开 / 被拦）就杀掉新版、恢复备份并重新打开旧版，旧版提示一次
+    「更新没有成功，已自动恢复」，并且不再自动推这个版本（手动检查仍可见）。
+  - **失败自动降级为手动更新**：一键更新在任何一步失败（下载、校验、签名、替换、不能原地更新），
+    或者新版起不来被回滚后，都会自动用浏览器下载对应芯片的 DMG（原来的手动更新方式），并告诉用户怎么装。
+    用户自己点「取消」不会触发。调试时设 `TUNEFREE_DEBUG_FALLBACK_LOG=<文件>` 只记录网址、不打开浏览器，
+    `TUNEFREE_DEBUG_BAD_DIGEST=1` 可以模拟校验失败。
   转换进行中不弹窗，只在顶栏显示「新版本」提示。
 - **首次说明**（`Views/OnboardingView.swift`）：首次打开弹出使用说明 + 免责声明，勾选同意才能继续；
   免责声明有改动时把 `disclaimerVersion` 加一，所有人会再看到一次。之后可从「帮助」菜单再次查看。

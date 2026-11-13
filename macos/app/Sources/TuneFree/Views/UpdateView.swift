@@ -56,33 +56,89 @@ struct UpdateView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
             }
 
-            Text("下载的是适合这台 Mac 的安装包（\(Updater.archSuffix == "arm64" ? "Apple 芯片" : "Intel 芯片")）。打开后把新版 TuneFree 拖进「应用程序」替换旧版即可。")
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            installStatus(release)
 
             HStack(spacing: 10) {
-                Button("跳过这个版本") {
-                    updater.skip(release)
-                    model.dismissSheet()
-                }
-                .buttonStyle(GhostButtonStyle(height: 38))
-                Button("以后再说") { model.dismissSheet() }
+                if installer.isBusy {
+                    if case .downloading = installer.state {
+                        Button("取消") { installer.cancel() }
+                            .buttonStyle(GhostButtonStyle(height: 38))
+                            .keyboardShortcut(.cancelAction)
+                    }
+                    Spacer()
+                } else {
+                    Button("跳过这个版本") {
+                        updater.skip(release)
+                        model.dismissSheet()
+                    }
                     .buttonStyle(GhostButtonStyle(height: 38))
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button {
-                    updater.download(release)
-                    model.dismissSheet()
-                } label: {
-                    Label("下载新版本", systemImage: "arrow.down.circle.fill")
+                    Button("以后再说") { model.dismissSheet() }
+                        .buttonStyle(GhostButtonStyle(height: 38))
+                        .keyboardShortcut(.cancelAction)
+                    Spacer()
+                    if case .failed = installer.state {
+                        Button("重新打开下载") {
+                            updater.download(release)
+                            model.dismissSheet()
+                        }
+                        .buttonStyle(GhostButtonStyle(height: 38))
+                    }
+                    Button {
+                        installer.install(release)
+                    } label: {
+                        Label(installer.state == .idle ? "立即更新" : "重试", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(PrimaryButtonStyle(height: 38))
+                    .frame(width: 150)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.phase == .running)
                 }
-                .buttonStyle(PrimaryButtonStyle(height: 38))
-                .frame(width: 170)
-                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(26)
+    }
+
+    private var installer: UpdateInstaller { updater.installer }
+
+    /// 安装进度 / 结果 / 说明
+    @ViewBuilder
+    private func installStatus(_ release: ReleaseInfo) -> some View {
+        switch installer.state {
+        case .idle:
+            Text(model.phase == .running
+                 ? "正在转换，等转换完成后再更新。"
+                 : "点「立即更新」会自动下载适合这台 Mac 的版本（\(Updater.archSuffix == "arm64" ? "Apple 芯片" : "Intel 芯片")），校验无误后替换旧版并重新打开，不用再去系统设置里允许。")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        case .downloading(let fraction):
+            progressRow(title: "正在下载… \(Int(fraction * 100))%", value: fraction)
+        case .verifying:
+            progressRow(title: "正在校验安装包…", value: nil)
+        case .installing:
+            progressRow(title: "正在安装…", value: nil)
+        case .relaunching:
+            progressRow(title: "更新完成，正在重新打开 TuneFree…", value: 1)
+        case .failed(let message):
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.gold)
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func progressRow(title: String, value: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.textSecondary)
+            if let value {
+                GlowBar(progress: value).frame(height: 6)
+            } else {
+                ProgressView().progressViewStyle(.linear).tint(Theme.accent2)
+            }
+        }
     }
 
     private func simple(symbol: String?, title: String, detail: String, showPage: Bool = false) -> some View {

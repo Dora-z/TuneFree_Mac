@@ -11,6 +11,7 @@ struct ReleaseInfo: Equatable {
     let pageURL: URL
     let downloadURL: URL?     // 对应本机芯片的 DMG
     let publishedAt: Date?
+    var sha256: String? = nil // GitHub 给每个发布文件算的 SHA-256（App 内更新用它校验）
 }
 
 /// 检查更新：启动时自动查一次（之后每天一次），也可以从菜单手动查。
@@ -20,6 +21,8 @@ struct ReleaseInfo: Equatable {
 @Observable
 final class Updater {
     static let repo = "Dora-z/TuneFree_Mac"
+    /// 不落盘缓存的会话：检查更新、下载安装包都不在 ~/Library/Caches 里留东西
+    static let session = URLSession(configuration: .ephemeral)
     static let releasesURL = URL(string: "https://github.com/\(repo)/releases")!
 
     enum State: Equatable {
@@ -41,6 +44,9 @@ final class Updater {
 
     /// 发现新版本时要求弹窗（ContentView 负责展示）
     var onFound: ((ReleaseInfo) -> Void)?
+
+    /// App 内一键更新
+    let installer = UpdateInstaller()
 
     private let defaults = UserDefaults.standard
     private var timer: Timer?
@@ -110,6 +116,12 @@ final class Updater {
         }
     }
 
+    /// 某个版本自动更新失败、已恢复旧版：不再自动弹窗推它（手动检查仍会显示）
+    func skipVersion(_ version: String) {
+        defaults.set(version, forKey: "updateSkippedVersion")
+        if badge?.version == version { badge = nil }
+    }
+
     func skip(_ release: ReleaseInfo) {
         defaults.set(release.version, forKey: "updateSkippedVersion")
         if badge == release { badge = nil }
@@ -171,7 +183,7 @@ final class Updater {
     private static func fromAPI() async throws -> ReleaseInfo {
         var req = request(URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await Updater.session.data(for: req)
         guard (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String else {
@@ -180,16 +192,20 @@ final class Updater {
         let assets = json["assets"] as? [[String: Any]] ?? []
         let dmg = assets.first { ($0["name"] as? String ?? "").hasSuffix("-\(archSuffix).dmg") }
         let download = (dmg?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        let digest = (dmg?["digest"] as? String).flatMap { d -> String? in
+            d.lowercased().hasPrefix("sha256:") ? String(d.dropFirst(7)).lowercased() : nil
+        }
         let page = (json["html_url"] as? String).flatMap(URL.init(string:)) ?? releasesURL
         let published = (json["published_at"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
         return ReleaseInfo(tag: tag, version: versionFromTag(tag), title: json["name"] as? String ?? tag,
                            notes: json["body"] as? String ?? "", pageURL: page,
-                           downloadURL: download ?? guessedDownload(tag), publishedAt: published)
+                           downloadURL: download ?? guessedDownload(tag), publishedAt: published,
+                           sha256: digest)
     }
 
     /// github.com/<repo>/releases/latest 会跳到 /releases/tag/<tag>，不走 API、不受限流
     private static func fromRedirect() async throws -> ReleaseInfo {
-        let (_, response) = try await URLSession.shared.data(for: request(URL(string: "https://github.com/\(repo)/releases/latest")!))
+        let (_, response) = try await Updater.session.data(for: request(URL(string: "https://github.com/\(repo)/releases/latest")!))
         guard let final = response.url, final.path.contains("/releases/tag/") else {
             throw URLError(.badServerResponse)
         }
@@ -200,6 +216,11 @@ final class Updater {
 
     private static func versionFromTag(_ tag: String) -> String {
         tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+    }
+
+    /// 某个版本的手动下载地址（对应本机芯片的 DMG）
+    static func manualDownloadURL(version: String) -> URL? {
+        guessedDownload("v" + version)
     }
 
     private static func guessedDownload(_ tag: String) -> URL? {

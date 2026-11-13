@@ -180,10 +180,25 @@ struct TuneFreeApp: App {
     private func startup() {
         let env = ProcessInfo.processInfo.environment
         let debugRun = env.keys.contains { $0.hasPrefix("TUNEFREE_DEBUG_") }
+        // 自动更新的收尾：新版报到 / 上次更新失败已恢复旧版 / 清理残留的更新文件
+        if let failed = UpdateInstaller.onLaunch() {
+            updater.skipVersion(failed)
+            // 新版没能正常启动、已恢复旧版：自动降级为原来的手动更新
+            if let url = Updater.manualDownloadURL(version: failed) {
+                UpdateInstaller.openManualDownload(url)
+                model.lastError = "更新到 \(failed) 没有成功，已自动恢复到当前版本，你的设置和文件都没有受影响。\n\n已改为手动更新：浏览器正在下载新版本，下载好后打开它，把 TuneFree 拖进「应用程序」替换旧版即可（第一次打开时系统可能要你在设置里允许一次）。"
+            } else {
+                model.lastError = "更新到 \(failed) 没有成功，已自动恢复到当前版本，你的设置和文件都没有受影响。请到发布页手动下载新版本。"
+            }
+        }
         if env["TUNEFREE_DEBUG_ONBOARDING"] == "1" || (!debugRun && model.needsOnboarding) {
             model.sheet = .onboarding
         }
-        updater.onFound = { [model] _ in model.presentUpdateIfQuiet() }
+        updater.onFound = { [model, updater] release in
+            model.presentUpdateIfQuiet()
+            // 调试：发现新版本就直接走一键更新（端到端测试用）
+            if env["TUNEFREE_DEBUG_AUTOUPDATE"] == "1" { updater.installer.install(release) }
+        }
         if !debugRun || env["TUNEFREE_DEBUG_VERSION"] != nil {
             updater.start()
         }

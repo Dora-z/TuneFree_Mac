@@ -12,7 +12,8 @@ format = "ULFO"                             # LZFSE 压缩：比 UDZO 小，macO
 filesystem = "HFS+"
 files = [app]
 symlinks = {"Applications": "/Applications"}
-hide_extensions = [app_name]                # 显示成「TuneFree」而不是「TuneFree.app」
+# 不设 hide_extensions：它会给 .app 写 FinderInfo 扩展属性，严格签名校验会判为不合规；
+# Finder 默认本来就不显示 .app 后缀
 icon = defines.get("volicon")              # noqa: F821  卷图标（Finder 侧栏 / 标题栏）
 
 background = defines["background"]         # noqa: F821
