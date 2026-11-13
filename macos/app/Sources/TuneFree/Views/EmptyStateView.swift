@@ -26,7 +26,7 @@ struct EmptyStateView: View {
                 Circle()
                     .fill(.ultraThinMaterial)
                     .frame(width: 112, height: 112)
-                    .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Theme.overlay(0.15), lineWidth: 1))
                 EqualizerBars(count: 7, active: true, barWidth: 4.5, spacing: 4)
                     .frame(width: 56, height: 42)
             }
@@ -38,7 +38,7 @@ struct EmptyStateView: View {
                     .font(.system(size: 34, weight: .bold, design: .default))
                     .tracking(-0.5)
                     .foregroundStyle(
-                        LinearGradient(colors: [.white, .white.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                        LinearGradient(colors: [Theme.textPrimary, Theme.textPrimary.opacity(0.78)], startPoint: .top, endPoint: .bottom))
                 Text("把 QQ音乐下载的 .mflac / .mgg 在本机离线解密，转成任何播放器都能打开的 MP3 与 FLAC。")
                     .font(.system(size: 14.5))
                     .foregroundStyle(Theme.textSecondary)
@@ -79,11 +79,11 @@ struct EmptyStateView: View {
             .padding(.vertical, 30)
             .background {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.white.opacity(isTargeted ? 0.07 : 0.025))
+                    .fill(Theme.overlay(isTargeted ? 0.07 : 0.025))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(isTargeted ? AnyShapeStyle(Theme.brandDiagonal) : AnyShapeStyle(Color.white.opacity(0.14)),
+                    .strokeBorder(isTargeted ? AnyShapeStyle(Theme.brandDiagonal) : AnyShapeStyle(Theme.overlay(0.14)),
                                   style: StrokeStyle(lineWidth: isTargeted ? 1.6 : 1, dash: isTargeted ? [] : [6, 6]))
             }
             .padding(.top, 34)

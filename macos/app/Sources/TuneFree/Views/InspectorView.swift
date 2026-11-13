@@ -37,8 +37,8 @@ struct InspectorView: View {
                                     .foregroundStyle(Theme.textTertiary)
                             }
                             .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.overlay(0.05)))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -141,7 +141,7 @@ struct InspectorView: View {
                 Button(role: .cancel) { model.cancel() } label: {
                     Label(model.cancelling ? "正在停止…" : "停止", systemImage: "stop.fill")
                 }
-                .buttonStyle(PrimaryButtonStyle(tint: LinearGradient(colors: [Color.white.opacity(0.14), Color.white.opacity(0.08)],
+                .buttonStyle(PrimaryButtonStyle(tint: LinearGradient(colors: [Theme.stopTop, Theme.stopBottom],
                                                                     startPoint: .top, endPoint: .bottom)))
                 .disabled(model.cancelling)
                 .keyboardShortcut(".", modifiers: .command)
@@ -184,7 +184,7 @@ struct InspectorView: View {
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(Theme.textSecondary)
             .frame(width: 26, height: 26)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+            .background(RoundedRectangle(cornerRadius: 7).fill(Theme.overlay(0.06)))
     }
 
     private func abbreviate(_ path: String) -> String {
@@ -208,7 +208,7 @@ private struct ModeCard: View {
                     .frame(width: 30, height: 30)
                     .background {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(selected ? AnyShapeStyle(Theme.brandDiagonal) : AnyShapeStyle(Color.white.opacity(0.06)))
+                            .fill(selected ? AnyShapeStyle(Theme.brandDiagonal) : AnyShapeStyle(Theme.overlay(0.06)))
                     }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(mode.title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
@@ -224,9 +224,9 @@ private struct ModeCard: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(selected ? 0.08 : (hover ? 0.04 : 0))))
+                .fill(Theme.overlay(selected ? 0.08 : (hover ? 0.04 : 0))))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(selected ? Color.white.opacity(0.14) : .clear, lineWidth: 0.8))
+                .strokeBorder(selected ? Theme.overlay(0.14) : .clear, lineWidth: 0.8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -246,7 +246,7 @@ private struct ToggleRow: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 7).fill(Theme.overlay(0.06)))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.textPrimary)
                 Text(detail).font(.system(size: 10.5)).foregroundStyle(Theme.textTertiary)
@@ -292,7 +292,7 @@ struct PillPicker<T: Hashable>: View {
             }
         }
         .padding(3)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.black.opacity(0.25)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.07), lineWidth: 0.8))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.well))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.overlay(0.07), lineWidth: 0.8))
     }
 }

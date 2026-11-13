@@ -69,7 +69,6 @@ struct OnboardingView: View {
         }
         .frame(width: 640, height: 680)
         .background(background)
-        .preferredColorScheme(.dark)
         .interactiveDismissDisabled(firstRun)
     }
 
@@ -171,8 +170,8 @@ struct OnboardingView: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.07), lineWidth: 0.8))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.overlay(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.overlay(0.07), lineWidth: 0.8))
     }
 
     private func note(_ symbol: String, _ text: String) -> some View {

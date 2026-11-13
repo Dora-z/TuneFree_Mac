@@ -1,18 +1,56 @@
+import AppKit
 import SwiftUI
 
-enum Theme {
-    static let ink = Color(red: 0.035, green: 0.039, blue: 0.067)
-    static let accent = Color(red: 0.42, green: 0.86, blue: 0.93)       // 青
-    static let accent2 = Color(red: 0.62, green: 0.48, blue: 1.00)      // 紫
-    static let accent3 = Color(red: 1.00, green: 0.47, blue: 0.62)      // 玫红
-    static let gold = Color(red: 0.98, green: 0.80, blue: 0.47)
-    static let success = Color(red: 0.36, green: 0.89, blue: 0.62)
-    static let danger = Color(red: 1.00, green: 0.42, blue: 0.45)
+/// 跟随外观变化的颜色：深色模式用 dark（就是原来那套），浅色模式用 light
+func adaptive(light: NSColor, dark: NSColor) -> Color {
+    Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+    })
+}
 
-    static let textPrimary = Color.white.opacity(0.95)
-    static let textSecondary = Color.white.opacity(0.62)
-    static let textTertiary = Color.white.opacity(0.38)
-    static let hairline = Color.white.opacity(0.08)
+private func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> NSColor {
+    NSColor(srgbRed: r, green: g, blue: b, alpha: a)
+}
+
+enum Theme {
+    // 底色
+    static let inkNS = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(0.035, 0.039, 0.067) : rgb(0.955, 0.952, 0.975)
+    }
+    static let ink = Color(nsColor: inkNS)
+
+    // 品牌色：浅色模式下稍微压暗，白底上对比够
+    static let accent = adaptive(light: rgb(0.10, 0.60, 0.76), dark: rgb(0.42, 0.86, 0.93))     // 青
+    static let accent2 = adaptive(light: rgb(0.47, 0.32, 0.96), dark: rgb(0.62, 0.48, 1.00))    // 紫
+    static let accent3 = adaptive(light: rgb(0.93, 0.30, 0.50), dark: rgb(1.00, 0.47, 0.62))    // 玫红
+    static let gold = adaptive(light: rgb(0.78, 0.50, 0.06), dark: rgb(0.98, 0.80, 0.47))
+    static let success = adaptive(light: rgb(0.09, 0.60, 0.35), dark: rgb(0.36, 0.89, 0.62))
+    static let danger = adaptive(light: rgb(0.86, 0.20, 0.27), dark: rgb(1.00, 0.42, 0.45))
+
+    // 文字
+    static let textPrimary = adaptive(light: rgb(0.07, 0.07, 0.12, 0.92), dark: NSColor(white: 1, alpha: 0.95))
+    static let textSecondary = adaptive(light: rgb(0.07, 0.07, 0.12, 0.62), dark: NSColor(white: 1, alpha: 0.62))
+    static let textTertiary = adaptive(light: rgb(0.07, 0.07, 0.12, 0.42), dark: NSColor(white: 1, alpha: 0.38))
+    static let hairline = adaptive(light: NSColor(white: 0, alpha: 0.08), dark: NSColor(white: 1, alpha: 0.08))
+
+    /// 半透明叠加（悬停、浅底、描边）：深色模式是白色，浅色模式是淡黑色
+    static func overlay(_ alpha: Double) -> Color {
+        adaptive(light: NSColor(white: 0, alpha: alpha * 0.55), dark: NSColor(white: 1, alpha: alpha))
+    }
+
+    /// 凹槽底色（分段选择器、筛选胶囊的轨道）
+    static let well = adaptive(light: NSColor(white: 0, alpha: 0.055), dark: NSColor(white: 0, alpha: 0.25))
+
+    /// 「停止」按钮（白字）：深色模式是半透明白，浅色模式是深灰，保证白字看得清
+    static let stopTop = adaptive(light: rgb(0.40, 0.40, 0.48), dark: NSColor(white: 1, alpha: 0.14))
+    static let stopBottom = adaptive(light: rgb(0.30, 0.30, 0.38), dark: NSColor(white: 1, alpha: 0.08))
+
+    /// 卡片阴影
+    static let shadow = adaptive(light: NSColor(white: 0, alpha: 0.10), dark: NSColor(white: 0, alpha: 0.35))
+
+    /// 玻璃卡片的高光描边
+    static let glassEdgeTop = adaptive(light: NSColor(white: 1, alpha: 0.9), dark: NSColor(white: 1, alpha: 0.18))
+    static let glassEdgeBottom = adaptive(light: NSColor(white: 0, alpha: 0.06), dark: NSColor(white: 1, alpha: 0.08))
 
     static let brand = LinearGradient(colors: [accent, accent2, accent3],
                                       startPoint: .leading, endPoint: .trailing)
@@ -33,17 +71,17 @@ struct GlassCard: ViewModifier {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .fill(Color.white.opacity(0.025))
+                            .fill(Theme.overlay(0.025))
                     )
             }
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(
-                        LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04), .white.opacity(0.08)],
+                        LinearGradient(colors: [Theme.glassEdgeTop, Theme.overlay(0.04), Theme.glassEdgeBottom],
                                        startPoint: .topLeading, endPoint: .bottomTrailing),
                         lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.35), radius: 30, y: 18)
+            .shadow(color: Theme.shadow, radius: 30, y: 18)
     }
 }
 
@@ -93,9 +131,9 @@ struct GhostButtonStyle: ButtonStyle {
             .padding(.horizontal, 14)
             .frame(minHeight: height)
             .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.white.opacity(configuration.isPressed ? 0.16 : (hover ? 0.11 : 0.07))))
+                .fill(Theme.overlay(configuration.isPressed ? 0.16 : (hover ? 0.11 : 0.07))))
             .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(.white.opacity(0.1), lineWidth: 0.8))
+                .strokeBorder(Theme.overlay(0.1), lineWidth: 0.8))
             .onHover { hover = $0 }
             .animation(.easeOut(duration: 0.15), value: hover)
     }
@@ -110,7 +148,7 @@ struct IconButtonStyle: ButtonStyle {
             .foregroundStyle(active ? Theme.accent : Theme.textSecondary)
             .frame(width: 32, height: 28)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(active ? 0.12 : (hover ? 0.08 : 0))))
+                .fill(Theme.overlay(active ? 0.12 : (hover ? 0.08 : 0))))
             .onHover { hover = $0 }
     }
 }
@@ -132,8 +170,8 @@ struct StatusPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Color.white.opacity(0.06)))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
+        .background(Capsule().fill(Theme.overlay(0.06)))
+        .overlay(Capsule().strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
     }
 }
 

@@ -38,6 +38,34 @@ enum Phase: Equatable {
     case finished
 }
 
+/// 外观：跟随系统 / 浅色 / 深色
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+    /// 窗口标题栏、弹窗、设置窗口这些 AppKit 部分也要跟着变
+    func apply() {
+        switch self {
+        case .system: NSApplication.shared.appearance = nil
+        case .light: NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 enum SheetKind: String, Identifiable {
     case onboarding   // 首次打开：使用说明 + 免责声明（必须同意）
     case about        // 从菜单再次查看说明
@@ -86,6 +114,12 @@ final class AppModel {
     var fillTags: Bool { didSet { save() } }
     var force: Bool { didSet { save() } }
     var onlineTags: Bool { didSet { save() } }
+    var appearance: AppearanceMode {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearanceMode")
+            appearance.apply()
+        }
+    }
     var writeLrc: Bool { didSet { save() } }
 
     // 运行状态
@@ -229,6 +263,7 @@ final class AppModel {
         fillTags = d.object(forKey: "fillTags") as? Bool ?? true
         force = d.object(forKey: "force") as? Bool ?? false
         onlineTags = d.object(forKey: "onlineTags") as? Bool ?? true
+        appearance = AppearanceMode(rawValue: d.string(forKey: "appearanceMode") ?? "") ?? .system
         writeLrc = d.object(forKey: "writeLrc") as? Bool ?? false
         if let p = d.string(forKey: "outputPath") {
             outputURL = URL(fileURLWithPath: p)

@@ -54,6 +54,11 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run   # �
 | `TUNEFREE_DEBUG_OPEN=<目录>` | 启动后自动载入这个文件夹 |
 | `TUNEFREE_DEBUG_OUTPUT=<目录>` | 本次的导出目录（不写入偏好设置） |
 | `TUNEFREE_DEBUG_AUTORUN=1` | 载入完成后自动开始 |
+| `TUNEFREE_DEBUG_OPEN_AFTER=<秒>` | 延迟多久再载入 `TUNEFREE_DEBUG_OPEN` 的文件夹 |
+| `TUNEFREE_DEBUG_START_AFTER=<秒>` | 载入完成后等多久再自动开始（默认 1.5） |
+| `TUNEFREE_DEBUG_RECORD=<目录>` | 录屏：按 `TUNEFREE_DEBUG_RECORD_FPS`（默认 30）截窗口帧，录 `TUNEFREE_DEBUG_RECORD_SECONDS` 秒后退出，帧时间写在 `frames.txt` |
+| `TUNEFREE_DEBUG_SHOWLOG=1` | 启动时打开日志面板 |
+| `-appearanceMode light` / `dark` | 命令行参数：这次运行固定浅色 / 深色（截图对比两种外观用） |
 | `TUNEFREE_DEBUG_ONBOARDING=1` | 强制弹出首次使用说明（调试运行时默认不弹） |
 | `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.1.3-mac.1`） |
 | `TUNEFREE_DEBUG_SNAPSHOT=<目录>` | 每秒把窗口截成 PNG，共 `TUNEFREE_DEBUG_SHOTS` 张后退出 |

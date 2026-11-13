@@ -134,8 +134,8 @@ struct LibraryView: View {
                         .padding(.vertical, 6)
                         .background {
                             if filter == f {
-                                Capsule().fill(Color.white.opacity(0.1))
-                                    .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 0.8))
+                                Capsule().fill(Theme.overlay(0.1))
+                                    .overlay(Capsule().strokeBorder(Theme.overlay(0.12), lineWidth: 0.8))
                             }
                         }
                         .contentShape(Capsule())
@@ -145,7 +145,7 @@ struct LibraryView: View {
                 }
             }
             .padding(3)
-            .background(Capsule().fill(Color.black.opacity(0.2)))
+            .background(Capsule().fill(Theme.well))
 
             Spacer()
 
@@ -254,7 +254,7 @@ struct TrackRow: View {
         .padding(.vertical, 9)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(track.status.isActive ? Color.white.opacity(0.085) : Color.white.opacity(hover ? 0.05 : 0))
+                .fill(track.status.isActive ? Theme.overlay(0.085) : Theme.overlay(hover ? 0.05 : 0))
                 .overlay {
                     if track.status.isActive {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -365,10 +365,10 @@ private struct SkeletonRow: View {
     @State private var shimmer = false
     var body: some View {
         HStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)).frame(width: 38, height: 38)
+            RoundedRectangle(cornerRadius: 10).fill(Theme.overlay(0.06)).frame(width: 38, height: 38)
             VStack(alignment: .leading, spacing: 6) {
-                RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.07)).frame(width: 180, height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.05)).frame(width: 110, height: 8)
+                RoundedRectangle(cornerRadius: 4).fill(Theme.overlay(0.07)).frame(width: 180, height: 10)
+                RoundedRectangle(cornerRadius: 4).fill(Theme.overlay(0.05)).frame(width: 110, height: 8)
             }
             Spacer()
         }

@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func attach(_ model: AppModel) {
         self.model = model
+        model.appearance.apply()      // App 起来之后再设，init 里 NSApp 还不存在
         if !pendingURLs.isEmpty {
             _ = model.handleDrop(pendingURLs)
             pendingURLs = []
@@ -43,19 +44,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum DebugHooks {
     static func install(_ model: AppModel) {
         let env = ProcessInfo.processInfo.environment
+        if env["TUNEFREE_DEBUG_SHOWLOG"] == "1" {
+            model.showLog = true
+        }
         if let out = env["TUNEFREE_DEBUG_OUTPUT"] {
             model.outputURL = URL(fileURLWithPath: out)
         }
         if let dir = env["TUNEFREE_DEBUG_OPEN"] {
-            model.load(URL(fileURLWithPath: dir))
+            let delay = Double(env["TUNEFREE_DEBUG_OPEN_AFTER"] ?? "") ?? 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                model.load(URL(fileURLWithPath: dir))
+            }
         }
         if env["TUNEFREE_DEBUG_AUTORUN"] == "1" {
+            let wait = Double(env["TUNEFREE_DEBUG_START_AFTER"] ?? "") ?? 1.5
             func waitAndStart() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
                     if model.phase == .ready { model.start() } else { waitAndStart() }
                 }
             }
             waitAndStart()
+        }
+        if let dir = env["TUNEFREE_DEBUG_RECORD"] {
+            Recorder.start(to: URL(fileURLWithPath: dir),
+                           fps: Double(env["TUNEFREE_DEBUG_RECORD_FPS"] ?? "") ?? 30,
+                           seconds: Double(env["TUNEFREE_DEBUG_RECORD_SECONDS"] ?? "") ?? 20)
         }
         if let out = env["TUNEFREE_DEBUG_SNAPSHOT"] {
             let shots = Int(env["TUNEFREE_DEBUG_SHOTS"] ?? "") ?? 8
@@ -66,6 +79,15 @@ enum DebugHooks {
                 }
             }
         }
+    }
+
+    /// 截一帧，返回 CGImage（录屏用；PNG 编码放到后台）
+    static func capture() -> CGImage? {
+        guard let window = NSApp.windows.first(where: { $0.isVisible }) else { return nil }
+        typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let h = dlopen(nil, RTLD_NOW), let sym = dlsym(h, "CGWindowListCreateImage") else { return nil }
+        let fn = unsafeBitCast(sym, to: Fn.self)
+        return fn(.null, 8, UInt32(window.windowNumber), 1)?.takeRetainedValue()
     }
 
     /// 走窗口服务器截自己的窗口（能截到动画的真实帧）；拿不到时退回 cacheDisplay
@@ -185,10 +207,77 @@ private struct WindowConfigurator: NSViewRepresentable {
             window.toolbarStyle = .unified
             window.styleMask.insert(.fullSizeContentView)
             window.isMovableByWindowBackground = true
-            window.backgroundColor = NSColor(red: 0.035, green: 0.039, blue: 0.067, alpha: 1)
-            window.appearance = NSAppearance(named: .darkAqua)
+            window.backgroundColor = Theme.inkNS      // 跟随外观变化
         }
         return view
     }
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// 开发用录屏：按固定帧率截窗口，帧 + 时间戳落到目录里（frames.txt 给 ffmpeg 拼视频）。
+///   TUNEFREE_DEBUG_RECORD=<目录>  TUNEFREE_DEBUG_RECORD_FPS=60  TUNEFREE_DEBUG_RECORD_SECONDS=20
+/// 截图在几个后台线程里轮流做（每个线程负责间隔的时间槽），不占主线程，帧率能到 60。
+enum Recorder {
+    private static let encodeQueue = DispatchQueue(label: "tunefree.recorder.encode", qos: .userInitiated,
+                                                   attributes: .concurrent)
+    private static let group = DispatchGroup()
+
+    static func start(to dir: URL, fps: Double, seconds: Double) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // 等窗口出来再开始
+        guard let window = NSApp.windows.first(where: { $0.isVisible }) else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { start(to: dir, fps: fps, seconds: seconds) }
+            return
+        }
+        let windowID = UInt32(window.windowNumber)
+        typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let h = dlopen(nil, RTLD_NOW), let sym = dlsym(h, "CGWindowListCreateImage") else { return }
+        let capture = unsafeBitCast(sym, to: Fn.self)
+
+        let started = Date()
+        let interval = 1.0 / fps
+        let total = Int(seconds * fps)
+        let workers = 4
+        var lines: [String] = []
+        let lock = NSLock()
+        let done = DispatchGroup()
+
+        for w in 0..<workers {
+            done.enter()
+            Thread.detachNewThread {
+                var slot = w
+                while slot < total {
+                    let due = started.addingTimeInterval(Double(slot) * interval)
+                    let wait = due.timeIntervalSinceNow
+                    if wait > 0 { Thread.sleep(forTimeInterval: wait) }
+                    // 落后超过一个间隔就跳过这个槽，保持时间轴准确
+                    if -due.timeIntervalSinceNow > interval * Double(workers) { slot += workers; continue }
+                    let t = Date().timeIntervalSince(started)
+                    if let image = capture(.null, 8, windowID, 1)?.takeRetainedValue() {
+                        let name = String(format: "f%05d.png", slot)
+                        group.enter()
+                        encodeQueue.async {
+                            let rep = NSBitmapImageRep(cgImage: image)
+                            try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name))
+                            lock.lock()
+                            lines.append(String(format: "%@ %.4f", name, t))
+                            lock.unlock()
+                            group.leave()
+                        }
+                    }
+                    slot += workers
+                }
+                done.leave()
+            }
+        }
+        done.notify(queue: .main) {
+            group.notify(queue: .main) {
+                lock.lock()
+                let text = lines.sorted().joined(separator: "\n") + "\n"
+                lock.unlock()
+                try? text.write(to: dir.appendingPathComponent("frames.txt"), atomically: true, encoding: .utf8)
+                NSApp.terminate(nil)
+            }
+        }
+    }
 }

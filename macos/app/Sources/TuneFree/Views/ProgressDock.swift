@@ -53,7 +53,7 @@ struct ProgressRing: View {
     let progress: Double
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.08), lineWidth: 5)
+            Circle().stroke(Theme.overlay(0.08), lineWidth: 5)
             Circle()
                 .trim(from: 0, to: max(0.001, progress))
                 .stroke(AngularGradient(colors: [Theme.accent, Theme.accent2, Theme.accent3, Theme.accent],
@@ -76,7 +76,7 @@ struct GlowBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.08))
+                Capsule().fill(Theme.overlay(0.08))
                 Capsule()
                     .fill(Theme.brand)
                     .frame(width: max(6, geo.size.width * progress))

@@ -24,7 +24,6 @@ struct UpdateView: View {
             Theme.ink
             RadialGradient(colors: [Theme.accent2.opacity(0.25), .clear], center: .topLeading, startRadius: 0, endRadius: 420)
         })
-        .preferredColorScheme(.dark)
     }
 
     private func available(_ release: ReleaseInfo) -> some View {
@@ -53,8 +52,8 @@ struct UpdateView: View {
                         .padding(14)
                 }
                 .frame(maxHeight: 260)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.08), lineWidth: 0.8))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.overlay(0.04)))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
             }
 
             Text("下载的是适合这台 Mac 的安装包（\(Updater.archSuffix == "arm64" ? "Apple 芯片" : "Intel 芯片")）。打开后把新版 TuneFree 拖进「应用程序」替换旧版即可。")
@@ -118,12 +117,19 @@ struct UpdateView: View {
         .padding(26)
     }
 
+    /// 只处理标题和 **加粗** / `代码`。不用系统的 Markdown 解析：它在 ** 紧挨中文标点时不认加粗，会把星号原样显示
     private func markdown(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         let cleaned = text
             .replacingOccurrences(of: "### ", with: "")
             .replacingOccurrences(of: "## ", with: "")
-        return (try? AttributedString(markdown: cleaned, options: options)) ?? AttributedString(cleaned)
+            .replacingOccurrences(of: "`", with: "")
+        var result = AttributedString()
+        for (i, part) in cleaned.components(separatedBy: "**").enumerated() {
+            var run = AttributedString(part)
+            if i % 2 == 1 { run.font = .system(size: 12.5, weight: .bold) }
+            result += run
+        }
+        return result
     }
 }
 
@@ -134,7 +140,16 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var updater = updater
+        @Bindable var model = model
         Form {
+            Section {
+                Picker("外观", selection: $model.appearance) {
+                    ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("通用")
+            }
             Section {
                 Toggle("自动检查更新", isOn: $updater.autoCheck)
                 HStack {

@@ -112,8 +112,8 @@ struct SummaryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.06), lineWidth: 0.8))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.overlay(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.overlay(0.06), lineWidth: 0.8))
     }
 
     private func title(_ s: RunSummary, _ ok: Bool) -> String {

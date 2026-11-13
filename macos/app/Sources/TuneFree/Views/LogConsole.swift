@@ -64,6 +64,7 @@ struct LogConsole: View {
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.ultraThinMaterial))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 30, y: 10)
+        .environment(\.colorScheme, .dark)     // 日志面板始终是深色终端风格
     }
 
     private func color(_ level: String) -> Color {

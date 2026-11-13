@@ -59,6 +59,7 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 - ✅ Optional container checks (OGG page CRC, FLAC STREAMINFO, MP3 frame headers)
 - ⚡ Skips songs already converted; parallel encoding
 - 📋 Live per-track status, failure reasons with suggestions, full log
+- 🌗 Light and dark mode follow the system (or pick one in Settings ⌘,)
 - 🔔 Automatic update check (prompts and downloads the right installer for your chip; turn it off in Settings ⌘,, or check manually via the app menu)
 - 📖 First-launch guide with usage notes and disclaimer, available later from the Help menu
 

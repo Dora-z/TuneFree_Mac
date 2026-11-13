@@ -48,7 +48,7 @@ struct ContentView: View {
                 .zIndex(10)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(model.appearance.colorScheme)
         .frame(minWidth: 1000, minHeight: 660)
         .dropDestination(for: URL.self) { urls, _ in
             model.handleDrop(urls)   // 动画由 .animation(value: phase) 负责
