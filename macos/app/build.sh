@@ -152,7 +152,7 @@ if [ "$MAKE_DMG" = 1 ]; then
   mkdir -p "$STAGE"
   ditto "$APP" "$STAGE/TuneFree.app"
   ln -s /Applications "$STAGE/Applications"
-  [ -f "$ROOT/ship/使用说明.txt" ] && cp "$ROOT/ship/使用说明.txt" "$STAGE/使用说明.txt"
+  cp "$HERE/Support/使用说明.txt" "$STAGE/使用说明.txt"
   hdiutil create -quiet -volname "TuneFree" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$DMG"
   rm -rf "$STAGE"
 fi
