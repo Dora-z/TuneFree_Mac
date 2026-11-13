@@ -142,7 +142,7 @@ build_arch() {
   else
     local PY
     PY="$(build_python "$ARCH")"
-    echo "==> 打包 Python 后端（$("${RUN[@]}" "$PY" -c 'import sys; print(sys.version.split()[0])')，$ARCH）"
+    echo "==> 打包 Python 后端（$("${RUN[@]}" "$PY" -c 'import sys; print(sys.version.split()[0])')，${ARCH}）"
     [ -x "$VENV/bin/python" ] || "${RUN[@]}" "$PY" -m venv "$VENV"
     "${RUN[@]}" "$VENV/bin/python" -m pip install -q --upgrade pip
     "${RUN[@]}" "$VENV/bin/python" -m pip install -q pyinstaller imageio-ffmpeg
@@ -173,7 +173,7 @@ build_arch() {
   # 2) 界面
   pick_sdk "$ARCH"
   [ -n "${SDKROOT:-}" ] && echo "==> SDK：$SDKROOT"
-  echo "==> 编译 SwiftUI 界面（$ARCH）"
+  echo "==> 编译 SwiftUI 界面（${ARCH}）"
   ( cd "$HERE" && swift build -c release --arch "$ARCH" 2>&1 | grep -vE "^\[|^Building|^Compiling|^Write" || true )
   local BIN
   BIN="$(cd "$HERE" && swift build -c release --arch "$ARCH" --show-bin-path)/TuneFree"

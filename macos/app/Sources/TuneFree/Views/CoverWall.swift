@@ -6,6 +6,15 @@ import SwiftUI
 struct CoverWallView: View {
     @Environment(AppModel.self) private var model
     @State private var filter: Filter = .all
+    @State private var tileFrames: [String: CGRect] = [:]
+    @State private var followedID: String?
+
+    /// 按列表顺序跟随当前阶段，避免并行完成事件把焦点拉来拉去。
+    private var followTarget: String? {
+        guard model.phase == .running, !model.cancelling else { return nil }
+        let status: TrackStatus = model.stage == "转码" ? .transcoding : .decrypting
+        return visible.first(where: { $0.status == status })?.id
+    }
 
     enum Filter: String, CaseIterable, Identifiable {
         case all = "全部", lossless = "无损", failed = "失败"
@@ -30,24 +39,58 @@ struct CoverWallView: View {
             if model.tracks.isEmpty && model.phase != .scanning {
                 emptyFolder
             } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 176), spacing: 20, alignment: .top)],
-                              alignment: .leading, spacing: 24) {
-                        if model.tracks.isEmpty {
-                            ForEach(0..<12, id: \.self) { _ in SkeletonTile() }
+                GeometryReader { viewport in
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 176), spacing: 20, alignment: .top)],
+                                      alignment: .leading, spacing: 24) {
+                                if model.tracks.isEmpty {
+                                    ForEach(0..<12, id: \.self) { _ in SkeletonTile() }
+                                }
+                                ForEach(visible) { track in
+                                    CoverTile(track: track)
+                                        .id(track.id)
+                                        .background(GeometryReader { geometry in
+                                            Color.clear.preference(key: CoverFramePreference.self,
+                                                value: [track.id: geometry.frame(in: .named("coverViewport"))])
+                                        })
+                                }
+                            }
+                            .padding(.horizontal, 26)
+                            .padding(.top, 4)
+                            .padding(.bottom, 28)
+                            .background(OverlayScroller())
                         }
-                        ForEach(visible) { track in
-                            CoverTile(track: track)
+                        .coordinateSpace(name: "coverViewport")
+                        .onPreferenceChange(CoverFramePreference.self) { tileFrames = $0 }
+                        .task(id: model.phase) {
+                            followedID = nil
+                            guard model.phase == .running else { return }
+                            // 合并密集的进度事件，每 0.7 秒最多移动一次；结束或离开界面即取消。
+                            while !Task.isCancelled {
+                                if let target = followTarget, target != followedID {
+                                    followedID = target
+                                    let frame = tileFrames[target]
+                                    let isVisible = frame.map {
+                                        $0.minY >= 12 && $0.maxY <= viewport.size.height - 12
+                                    } ?? false
+                                    if !isVisible {
+                                        withAnimation(.easeInOut(duration: 0.35)) {
+                                            proxy.scrollTo(target, anchor: .center)
+                                        }
+                                    }
+                                }
+                                do { try await Task.sleep(for: .milliseconds(700)) }
+                                catch { return }
+                            }
                         }
+                        .onChange(of: filter) { followedID = nil }
+                        .onChange(of: model.stage) { followedID = nil }
+                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.025),
+                                                     .init(color: .black, location: 0.96), .init(color: .clear, location: 1)],
+                                             startPoint: .top, endPoint: .bottom))
                     }
-                    .padding(.horizontal, 26)
-                    .padding(.top, 4)
-                    .padding(.bottom, 28)
-                    .background(OverlayScroller())   // 放在内容里，才能顺着往上找到它的 NSScrollView
                 }
-                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.025),
-                                             .init(color: .black, location: 0.96), .init(color: .clear, location: 1)],
-                                     startPoint: .top, endPoint: .bottom))
             }
         }
     }
@@ -485,5 +528,13 @@ private struct OverlayScroller: NSViewRepresentable {
             }
             return nil
         }
+    }
+}
+
+/// 只测量已布局的封面；未布局的目标由 ScrollViewReader 定位。
+private struct CoverFramePreference: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
