@@ -126,7 +126,9 @@ struct SummaryView: View {
 
     private func subtitle(_ s: RunSummary) -> String {
         if s.cancelled { return "已处理的歌曲保留在输出目录，下次会自动跳过" }
-        return "共 \(s.found) 首 · 导出到 \(model.outputURL.lastPathComponent)"
+        let tagged = model.onlineTaggedCount
+        let tagNote = tagged > 0 ? " · \(tagged) 首补全了封面 / 歌词" : ""
+        return "共 \(s.found) 首\(tagNote) · 导出到 \(model.outputURL.lastPathComponent)"
     }
 
     private func stageName(_ stage: String) -> String {

@@ -55,7 +55,7 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 
 - 🎵 Batch processing, walks subfolders
 - 🎚 MP3 only / MP3 + lossless FLAC / lossless only; MP3 at 128k, 192k or 320k
-- 🏷 Fills in missing title/artist tags from the `Artist-Title` file name
+- 🏷 **Complete tags**: looks the song up on QQ Music by its ID — title, all artists, album, year, track number, genre, label — and embeds the **800×800 album cover** and **lyrics** (optional `.lrc` file for synced lyrics). A result is only used if title, artist and duration match the file; otherwise the file's own tags and the `Artist-Title` file name are used
 - ✅ Optional container checks (OGG page CRC, FLAC STREAMINFO, MP3 frame headers)
 - ⚡ Skips songs already converted; parallel encoding
 - 📋 Live per-track status, failure reasons with suggestions, full log
@@ -74,7 +74,7 @@ The app isn't notarized, so macOS blocks it the first time: in Applications, **r
 
 **"Can't get key" / "login expired"** — `musicex` files don't carry their key. TuneFree reads QQ Music's local login state and asks QQ Music's official API for that song's key. Log in to QQ Music once, then press "再次转换" (Convert again). Files forwarded from someone else can't be decrypted, because the key is bound to the account that downloaded them.
 
-**Does it upload my music?** No. The only network request is the key lookup for `musicex` files; everything else is fully offline.
+**Does it upload my music?** No. It talks to QQ Music's official API for two things: the key for `musicex` files (required to decrypt), and tag lookup by song ID (cover, album, lyrics; no login). Turn off "联网补全标签" (online tags) under Advanced, or pass `--no-online-tags`, to skip the tag lookup.
 
 ## Build from source
 

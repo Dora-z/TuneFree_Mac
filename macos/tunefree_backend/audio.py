@@ -95,21 +95,56 @@ def _base_cmd(ffmpeg_path):
     return [ffmpeg_path, "-hide_banner", "-nostdin", "-v", "error", "-y"]
 
 
-def _mp3_args(bitrate, keep_cover=True, metadata=None):
+# 统一标签键 → ffmpeg 写 ID3 时认的键（album_artist→TPE2，disc→TPOS，publisher→TPUB）
+_ID3_KEYS = {
+    "title": "title", "artist": "artist", "album": "album", "albumartist": "album_artist",
+    "date": "date", "track": "track", "disc": "disc", "genre": "genre", "publisher": "publisher",
+}
+# FLAC 用 Vorbis comment 的标准名
+_VORBIS_KEYS = {
+    "title": "TITLE", "artist": "ARTIST", "album": "ALBUM", "albumartist": "ALBUMARTIST",
+    "date": "DATE", "track": "TRACKNUMBER", "disc": "DISCNUMBER", "genre": "GENRE",
+    "publisher": "ORGANIZATION", "lyrics": "LYRICS",
+}
+
+
+def _metadata_args(metadata, keymap):
+    args = []
+    for key, value in (metadata or {}).items():
+        target = keymap.get(key)
+        if target and value:
+            args += ["-metadata", "%s=%s" % (target, value)]
+    return args
+
+
+def _cover_args(cover_index):
+    """把第 cover_index 个输入当专辑封面（attached picture）。"""
+    return ["-map", "%d:0" % cover_index, "-c:v", "copy", "-disposition:v:0", "attached_pic",
+            "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"]
+
+
+def _inputs(src, cover=None):
+    args = ["-i", str(src)]
+    if cover:
+        args += ["-i", str(cover)]
+    return args
+
+
+def _mp3_args(bitrate, keep_cover=True, metadata=None, cover=None):
     args = ["-map", "0:a:0"]
-    if keep_cover:
+    if cover:
+        args += _cover_args(1)
+    elif keep_cover:
         args += ["-map", "0:v?", "-c:v", "copy"]
     args += [
         "-c:a", "libmp3lame",
         "-b:a", bitrate,
-        "-map_metadata", "0",
+        # 不整体拷源标签：OGG 里有 QQ音乐私有字段；需要的标签都在 metadata 里显式写
+        "-map_metadata", "-1",
         "-id3v2_version", "3",
         "-write_id3v1", "1",
     ]
-    for key, value in (metadata or {}).items():
-        if value:
-            args += ["-metadata", "%s=%s" % (key, value)]
-    return args
+    return args + _metadata_args(metadata, _ID3_KEYS)
 
 
 def explain_returncode(code):
@@ -129,7 +164,7 @@ def explain_returncode(code):
     return "未知错误"
 
 
-def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
+def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None, cover=None):
     """转码成 MP3，返回 (ok, 错误说明)。
 
     顺序：直接写目标文件 → 让 ffmpeg 写到 stdout 由 Python 落盘 → 写临时目录再搬。
@@ -138,8 +173,10 @@ def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
     src = str(src)
     dst = str(dst)
 
-    def _try_direct(keep_cover):
-        cmd = _base_cmd(ffmpeg_path) + ["-i", src] + _mp3_args(bitrate, keep_cover, metadata) + [dst]
+    def _try_direct(keep_cover, with_cover=True):
+        use_cover = cover if with_cover else None
+        cmd = (_base_cmd(ffmpeg_path) + _inputs(src, use_cover)
+               + _mp3_args(bitrate, keep_cover, metadata, use_cover) + [dst])
         _run(cmd)
 
     try:
@@ -151,9 +188,9 @@ def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
         code = exc.returncode
         # 封面复制失败（罕见编码）就退一步：只要音频
         stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode("utf-8", "ignore")
-        if code == 1 and "map" in stderr.lower():
+        if code == 1 and ("map" in stderr.lower() or cover):
             try:
-                _try_direct(False)
+                _try_direct(False, with_cover=False)
                 return True, ""
             except subprocess.CalledProcessError as exc2:
                 exc = exc2
@@ -165,7 +202,8 @@ def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
         if code in (-13, 4294967283, -5, 4294967291):
             # 目标不可写：走管道
             try:
-                cmd = _base_cmd(ffmpeg_path) + ["-i", src] + _mp3_args(bitrate, True, metadata) + ["-f", "mp3", "pipe:1"]
+                cmd = (_base_cmd(ffmpeg_path) + _inputs(src, cover)
+                       + _mp3_args(bitrate, True, metadata, cover) + ["-f", "mp3", "pipe:1"])
                 proc = _run(cmd, capture_stdout=True)
                 data = proc.stdout or b""
                 if len(data) < 2048:
@@ -177,7 +215,7 @@ def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
             # 再退一步：临时目录中转
             tmp = Path(tempfile.gettempdir()) / ("tf_%d_%s.mp3" % (os.getpid(), Path(dst).stem))
             try:
-                _run(_base_cmd(ffmpeg_path) + ["-i", src] + _mp3_args(bitrate, True, metadata) + [str(tmp)])
+                _run(_base_cmd(ffmpeg_path) + _inputs(src, cover) + _mp3_args(bitrate, True, metadata, cover) + [str(tmp)])
                 shutil.move(str(tmp), dst)
                 return True, ""
             except Exception as exc3:
@@ -198,6 +236,33 @@ def transcode_to_mp3(src, dst, ffmpeg_path, bitrate="192k", metadata=None):
         return False, msg
     except OSError as exc:
         return False, "无法运行 ffmpeg：%s" % exc
+
+
+def retag_flac(path, ffmpeg_path, metadata=None, cover=None, lyrics=None):
+    """重写 FLAC 的标签 / 封面 / 歌词（音频流原样拷贝）。返回 (ok, 错误说明)。"""
+    path = str(path)
+    tmp = path + ".retag.flac"
+    tags = dict(metadata or {})
+    if lyrics:
+        tags["lyrics"] = lyrics
+    args = _base_cmd(ffmpeg_path) + _inputs(path, cover) + ["-map", "0:a:0"]
+    args += _cover_args(1) if cover else ["-map", "0:v?", "-c:v", "copy"]
+    args += ["-c:a", "copy", "-map_metadata", "-1"] + _metadata_args(tags, _VORBIS_KEYS) + [tmp]
+    try:
+        _run(args)
+        os.replace(tmp, path)
+        return True, ""
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr if isinstance(exc.stderr, str) else ""
+        return False, "写 FLAC 标签失败：%s" % (detail.strip().splitlines()[-1] if detail.strip() else exc.returncode)
+    except OSError as exc:
+        return False, "写 FLAC 标签失败：%s" % exc
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def find_ffprobe(ffmpeg_path=None):

@@ -207,13 +207,18 @@ struct TrackRow: View {
             Artwork(track: track)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(track.title)
+                Text(track.displayTitle)
                     .font(.system(size: 13.5, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text(track.artist.isEmpty ? "未知歌手" : track.artist)
+                    Text(track.displayArtist.isEmpty ? "未知歌手" : track.displayArtist)
                         .lineLimit(1)
+                    if let album = track.album, !album.isEmpty {
+                        Text("·  \(album)\(track.year.map { " · \($0)" } ?? "")")
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                    }
                     if case .failed(let msg) = track.status {
                         Text("· \(msg)")
                             .foregroundStyle(Theme.danger.opacity(0.9))
@@ -279,7 +284,15 @@ struct Artwork: View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(LinearGradient(colors: [c1, c2], startPoint: .topLeading, endPoint: .bottomTrailing))
-            if track.status.isActive {
+            if let path = track.coverPath, let image = CoverCache.image(path) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .transition(.opacity)
+            } else if track.status.isActive {
                 EqualizerBars(count: 4, active: true, color: AnyShapeStyle(Color.white), barWidth: 2.5, spacing: 2)
                     .frame(width: 18, height: 16)
             } else {
@@ -291,6 +304,24 @@ struct Artwork: View {
         .frame(width: size, height: size)
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.15), lineWidth: 0.6))
         .shadow(color: c2.opacity(0.4), radius: 6, y: 3)
+    }
+}
+
+/// 封面缩略图缓存（同一张专辑封面多首歌共用，不重复解码 800×800 的 JPEG）
+enum CoverCache {
+    private static let cache = NSCache<NSString, NSImage>()
+
+    static func image(_ path: String) -> NSImage? {
+        if let hit = cache.object(forKey: path as NSString) { return hit }
+        guard let full = NSImage(contentsOfFile: path) else { return nil }
+        let side: CGFloat = 96
+        let thumb = NSImage(size: NSSize(width: side, height: side))
+        thumb.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        full.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        thumb.unlockFocus()
+        cache.setObject(thumb, forKey: path as NSString)
+        return thumb
     }
 }
 

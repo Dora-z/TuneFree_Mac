@@ -75,5 +75,6 @@ app/
 ## 用到的后端事件
 
 `info`（`--info --json`，列表里的格式/布局/是否需要登录态）、`progress`、`log`、
-`decrypt-ok` / `decrypt-skip` / `decrypt-fail`、`transcode-ok` / `transcode-skip` / `transcode-fail`、`result`。
+`decrypt-ok` / `decrypt-skip` / `decrypt-fail`、`tags`（最终标签 + 封面路径，列表里显示封面和专辑）、
+`transcode-ok` / `transcode-skip` / `transcode-fail`、`result`。
 停止按钮发 SIGINT，后端做完当前这首后退出（退出码 130）。

@@ -92,7 +92,9 @@ struct InspectorView: View {
                         if showAdvanced {
                             VStack(spacing: 2) {
                                 ToggleRow(symbol: "checkmark.seal", title: "容器校验", detail: "逐页 CRC，确保无损坏", isOn: $model.verify)
-                                ToggleRow(symbol: "tag", title: "补全标签", detail: "从文件名回填歌手 / 歌名", isOn: $model.fillTags)
+                                ToggleRow(symbol: "photo.on.rectangle.angled", title: "联网补全标签", detail: "封面、专辑、年份、歌词", isOn: $model.onlineTags)
+                                ToggleRow(symbol: "tag", title: "文件名补标签", detail: "从「歌手-歌名」回填", isOn: $model.fillTags)
+                                ToggleRow(symbol: "text.quote", title: "另存歌词文件", detail: ".lrc，车机 / 播放器同步显示", isOn: $model.writeLrc)
                                 ToggleRow(symbol: "arrow.clockwise", title: "覆盖已有文件", detail: "默认跳过已转好的歌曲", isOn: $model.force)
                                 HStack(spacing: 10) {
                                     rowIcon("cpu")

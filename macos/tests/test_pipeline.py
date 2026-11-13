@@ -29,9 +29,27 @@ def make_flac(seconds=2, rate=44100):
     return path
 
 
+class OfflineClient(object):
+    """测试不联网：联网补全一律「没查到」。"""
+
+    available = True
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def resolve(self, hints):
+        return None
+
+    def cover(self, album_mid):
+        return None
+
+
 @unittest.skipIf(FFMPEG is None, "本机没有 ffmpeg")
 class PipelineTest(unittest.TestCase):
     def setUp(self):
+        self._real_client = job.meta_mod.Client
+        job.meta_mod.Client = OfflineClient
+        self.addCleanup(setattr, job.meta_mod, "Client", self._real_client)
         self.root = tempfile.mkdtemp(prefix="tf-flow-")
         self.in_dir = os.path.join(self.root, "in")
         os.makedirs(self.in_dir)

@@ -23,7 +23,7 @@ from .decrypt import (OUTPUT_EXT, SUPPORTED_EXTS, DecryptError, decrypt_file,
 from .job import FileError, Job, Options, Progress, Result, normalize_bitrate, run, scan_inputs
 from .selftest import run_selftest
 
-VERSION = "2.1.3-mac.4"
+VERSION = "2.1.3-mac.5"
 
 __all__ = [
     "VERSION",

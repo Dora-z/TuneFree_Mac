@@ -20,7 +20,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import audio, decrypt, verify
+from . import audio, decrypt, id3, verify
+from . import meta as meta_mod
+from . import tags as tags_mod
 
 
 class Progress(object):
@@ -115,7 +117,8 @@ class Options(object):
     def __init__(self, input_dir=None, output_root=None, flac_dir=None, mp3_dir=None,
                  bitrate="192k", keep_flac=False, no_mp3=False, force=False,
                  jobs=1, ekey=None, verify_output=False, ffmpeg_path=None,
-                 auto_ekey=True, authst=None, uin=None, tag_from_filename=True):
+                 auto_ekey=True, authst=None, uin=None, tag_from_filename=True,
+                 online_tags=True, write_lrc=False, meta_cache_dir=None):
         self.input_dir = os.path.abspath(os.path.expanduser(input_dir or os.getcwd()))
         root = os.path.abspath(os.path.expanduser(output_root or os.path.join(self.input_dir, "output")))
         self.output_root = root
@@ -131,6 +134,9 @@ class Options(object):
         self.authst = authst
         self.uin = uin
         self.tag_from_filename = bool(tag_from_filename)
+        self.online_tags = bool(online_tags)      # 联网补全：封面 / 专辑 / 年份 / 歌词
+        self.write_lrc = bool(write_lrc)          # 另存一份 .lrc 同步歌词
+        self.meta_cache_dir = meta_cache_dir
         self.verify_output = bool(verify_output)
         self.ffmpeg_path = ffmpeg_path
 
@@ -172,6 +178,8 @@ class Job(object):
         self.on_file = on_file or (lambda event: None)
         self._cancel = False
         self.result = Result()
+        self._hints = {}          # 解密产物路径 → (song_id, media_mid)，转码时联网查标签用
+        self._meta = None
 
     # ---------------------------------------------------------- 控制 ----
     def cancel(self):
@@ -240,6 +248,12 @@ class Job(object):
 
             if os.path.exists(dst) and not opts.force:
                 result.decrypt_skipped += 1
+                if opts.online_tags:
+                    try:
+                        found = decrypt.probe(src)
+                        self._hints[dst] = (found.get("song_id"), found.get("mid"))
+                    except Exception:
+                        pass
                 self.on_progress(Progress("解密", index, total, name))
                 self.on_file({"event": "decrypt-skip", "input": src, "output": dst})
                 continue
@@ -262,6 +276,7 @@ class Job(object):
                               "reason": "unexpected", "message": str(exc)})
             else:
                 result.decrypted += 1
+                self._hints[dst] = (info.get("song_id"), info.get("mid"))
                 note = ""
                 if opts.verify_output:
                     check = verify.verify_file(dst)
@@ -310,8 +325,14 @@ class Job(object):
 
         total = len(jobs)
         self.log("找到 %d 个音频，开始转码…" % total)
+        if opts.online_tags:
+            self._meta = meta_mod.Client(cache_dir=opts.meta_cache_dir, log=self.on_log)
+            self.log("联网补全标签：开（封面 / 专辑 / 年份 / 歌词，查到的结果和文件对得上才用）")
 
         tally = _Tally()
+        self._online_hits = 0
+        self._online_misses = 0
+        self._count_lock = threading.Lock()
 
         def handle(item):
             src, name = item
@@ -321,6 +342,10 @@ class Job(object):
             mp3_path = os.path.join(opts.mp3_dir, os.path.splitext(name)[0] + ".mp3")
 
             if opts.no_mp3 and ext == ".flac":
+                tagset = self._tags_for(src, name)
+                self._apply_flac(src, tagset, ffmpeg_path)
+                if opts.write_lrc:
+                    self._write_lrc(src, tagset)
                 tally.add("ok")
                 self.on_progress(Progress("转码", tally.done, total, name))
                 self.on_file({"event": "transcode-skip", "input": src, "reason": "no-mp3"})
@@ -336,13 +361,20 @@ class Job(object):
                 self.on_file({"event": "transcode-skip", "input": src, "output": mp3_path})
                 return
 
-            metadata = None
-            if opts.tag_from_filename:
-                metadata = audio.merge_tags(audio.read_tags(src, ffmpeg_path), name)
+            tagset = self._tags_for(src, name)
             ok, message = audio.transcode_to_mp3(src, mp3_path, ffmpeg_path, opts.bitrate,
-                                                metadata=metadata)
+                                                metadata=tagset["tags"], cover=tagset["cover"])
             if ok:
                 tally.add("ok")
+                if tagset["lyrics"]:
+                    try:
+                        id3.add_lyrics(mp3_path, meta_mod.lrc_to_text(tagset["lyrics"]))
+                    except (id3.ID3Error, OSError) as exc:
+                        self.log("写歌词失败：%s — %s" % (os.path.basename(mp3_path), exc), "warning")
+                if opts.write_lrc:
+                    self._write_lrc(mp3_path, tagset)
+                if keep_source and ext == ".flac":
+                    self._apply_flac(src, tagset, ffmpeg_path)
                 if not keep_source:
                     _force_remove(src)
                 note = ""
@@ -370,11 +402,80 @@ class Job(object):
             for item in jobs:
                 handle(item)
 
+        if self._meta is not None:
+            self.log("标签：%d 首联网补全，%d 首只用本地标签" % (self._online_hits, self._online_misses))
+
         result.mp3_ok = tally.ok
         result.mp3_failed = tally.fail
         result.mp3_skipped = tally.skip
         self.log("转码阶段完成：成功 %d，失败 %d，跳过 %d"
                  % (result.mp3_ok, result.mp3_failed, result.mp3_skipped))
+
+    # ------------------------------------------------------------ 标签 ----
+    def _tags_for(self, src, name):
+        """算出这首歌最终要写的标签：联网结果（对得上才用）> 源文件标签 > 文件名。"""
+        opts = self.options
+        source = tags_mod.read_source(src)
+        base = dict(source.tags)
+        if opts.tag_from_filename:
+            base = audio.merge_tags(base, name)
+        lyrics = base.pop("lyrics", "")
+        base.pop("comment", None)
+        found = None
+        cover = None
+        if self._meta is not None and self._meta.available:
+            song_id, mid = self._hints.get(src, (None, None))
+            hints = meta_mod.Hints(song_id=song_id, song_mid=mid, title=base.get("title"),
+                                   artist=base.get("artist"), duration=source.duration)
+            try:
+                found = self._meta.resolve(hints)
+            except Exception as exc:  # 联网只是锦上添花，任何异常都不能拖垮转码
+                self.log("联网查标签出错（%s）：%s" % (name, exc), "warning")
+                found = None
+            with self._count_lock:
+                if found is not None:
+                    self._online_hits += 1
+                else:
+                    self._online_misses += 1
+        final = dict(base)
+        if found is not None:
+            final.update(found.to_tags())
+            lyrics = found.lyrics or lyrics
+            try:
+                cover = self._meta.cover(found.album_mid)
+            except Exception:
+                cover = None
+        tagset = {"tags": final, "cover": cover, "lyrics": lyrics, "online": found is not None}
+        event = {"event": "tags", "input": src, "online": found is not None,
+                 "title": final.get("title", ""), "artist": final.get("artist", ""),
+                 "album": final.get("album", ""), "year": final.get("date", "")[:4],
+                 "cover": cover or "", "lyrics": bool(lyrics)}
+        self.on_file(event)
+        if found is not None:
+            self.log("标签：%s - %s《%s》%s（联网）%s%s" % (
+                final.get("artist", ""), final.get("title", ""), final.get("album", ""),
+                final.get("date", "")[:4], "，封面" if cover else "", "，歌词" if lyrics else ""))
+        return tagset
+
+
+    def _apply_flac(self, path, tagset, ffmpeg_path):
+        if not path.lower().endswith(".flac") or not ffmpeg_path:
+            return
+        ok, message = audio.retag_flac(path, ffmpeg_path, tagset["tags"], tagset["cover"], tagset["lyrics"])
+        if not ok:
+            self.log("%s：%s" % (os.path.basename(path), message), "warning")
+
+
+    def _write_lrc(self, audio_path, tagset):
+        lyrics = tagset.get("lyrics") or ""
+        if "[" not in lyrics:      # 没有时间戳的纯文本歌词就不另存了
+            return
+        lrc = os.path.splitext(audio_path)[0] + ".lrc"
+        try:
+            with open(lrc, "w", encoding="utf-8") as fh:
+                fh.write(lyrics.rstrip() + "\n")
+        except OSError as exc:
+            self.log("写 .lrc 失败：%s" % exc, "warning")
 
 
 def _unique_path(folder, stem, ext, used, src):

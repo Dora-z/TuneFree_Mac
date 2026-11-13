@@ -46,6 +46,8 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 | `--no-ekey-fetch` | 不自动调 GetEVkey（只用文件内密钥或 `--ekey`） |
 | `--ffmpeg` | 手动指定 ffmpeg 路径 |
 | `--no-tags` | 不从文件名回填标签（默认会补全缺失的歌名/歌手） |
+| `--no-online-tags` | 不联网补全标签（默认按歌曲 ID 查封面、专辑、年份、歌词） |
+| `--lrc` | 另存一份 `.lrc` 同步歌词（与 MP3 同名） |
 | `--verify` | 每个产物做容器校验（OGG 逐页 CRC / FLAC STREAMINFO / MP3 帧头） |
 | `--json` | 事件以 JSON 行输出，给新前端解析 |
 | `--info` | 只探查尾部结构（QTag / V1 / musicex / qmc1），不解密 |
@@ -74,6 +76,7 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 {"event":"decrypt-ok","input":"/in/a.mflac","output":"/out/flac/a.flac","info":{...}}
 {"event":"transcode-ok","input":"/out/flac/a.flac","output":"/out/mp3/a.mp3"}
 {"event":"decrypt-fail","input":"/in/b.mgg","reason":"ekey","message":"..."}
+{"event":"tags","input":"/out/flac/a.flac","online":true,"title":"...","artist":"甲/乙","album":"...","year":"2007","cover":"~/Library/Caches/TuneFree/covers/xxx.jpg","lyrics":true}
 {"event":"result","result":{"files_found":10,"decrypted":9,"decrypt_failed":1,"mp3_ok":9,...}}
 ```
 
@@ -191,16 +194,23 @@ python3 main.py --selftest
 `--verify` 会额外做容器级校验：OGG 逐页 CRC（能发现「只错一个字节」这种问题）、
 FLAC STREAMINFO、MP3 帧头。
 
-## 标签回填
+## 标签
 
-QQ音乐的缓存文件经常不带标签（`.mgg` 里常常一个标签都没有），转出来的 MP3 在播放器里
-就是「未知歌手 / 未知标题」。所以转码时会做一次合并：
+QQ音乐的缓存文件经常不带标签（`.mgg` 里常常一个都没有），或者只有部分（只写第一个歌手、没有封面）。
+转码时每首歌按下面的优先级算出最终标签，**显式写入**（不整体拷源标签，OGG 里的 QQ音乐私有字段不会带出来）：
 
-- 先读源文件已有的标签（ffprobe）；
-- 缺失的 `title` / `artist` 从文件名补 —— QQ音乐的缓存名就是 `歌手-歌名`；
-- 歌手一栏如果文件名信息更全（源文件只写了「张震岳」，文件名是「张震岳,蔡健雅」），用文件名的。
+1. **联网结果**（`meta.py`）：文件尾部有 song_id（QTag / musicex）就直接查歌曲详情；没有（V1 / QMC1）
+   就用「歌手 + 歌名」搜一次。查到的结果**歌名、歌手、时长都要和文件对得上**才用（时长差 6 秒以内），
+   对不上就当没查到 —— 宁可少补也不写错。连续 3 次连不上就停用，本批剩下的歌直接用本地标签。
+2. **源文件标签**（`tags.py` 直接解析 FLAC / OGG 的 Vorbis comment，不依赖 ffprobe）。
+3. **文件名**：缺的 `title` / `artist` 从 `歌手-歌名` 补；文件名里歌手更全时用文件名的。
 
-不想要就在命令行加 `--no-tags`。
+写入内容：歌名、歌手（多位用 `/` 分隔）、专辑、专辑艺人、年份、曲序、碟号、流派、唱片公司；
+专辑封面（800×800 JPEG，缓存在 `~/Library/Caches/TuneFree/covers/`）；歌词 ——
+MP3 写标准 `USLT` 帧（纯文本，`id3.py`；ffmpeg 自己写的是播放器不认的 `TXXX`），
+保留的 FLAC 写 `LYRICS`（带时间戳的 LRC）并同样嵌封面；加 `--lrc` 另存一份 `.lrc`。
+
+`--no-online-tags` 只用本地标签，`--no-tags` 再关掉文件名回填。
 
 ## 打包发布
 
@@ -260,7 +270,10 @@ macos/
 │   ├── qmc1.py                  QMC1 固定异或表
 │   ├── decrypt.py               文件级解密、原子落盘、扩展名映射
 │   ├── ekey.py                  musicex 取密钥：读本机登录态 + 调 GetEVkey
-│   ├── audio.py                 ffmpeg/ffprobe 查找、转码（三重回退）、标签回填
+│   ├── audio.py                 ffmpeg 查找、转码（三重回退）、写标签 / 封面
+│   ├── tags.py                  直接解析 FLAC / OGG 的标签与时长
+│   ├── meta.py                  联网补全标签：歌曲详情、搜索、封面、歌词，结果校验
+│   ├── id3.py                   给 MP3 写标准 USLT 歌词帧
 │   ├── job.py                   扫描 → 解密 → 转码的编排，进度/取消/并发
 │   ├── verify.py                OGG/FLAC/MP3 容器校验
 │   └── selftest.py              向量 + 端到端自检

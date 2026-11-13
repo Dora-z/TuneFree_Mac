@@ -92,6 +92,7 @@ def probe(path):
         info["kind"] = footer.kind
         info["song_id"] = footer.song_id
         info["mid"] = footer.mid
+        info["mid"] = footer.mid
         info["filename"] = footer.filename
         info["audio_bytes"] = footer.audio_len
         if footer.ekey:
@@ -163,6 +164,7 @@ def decrypt_bytes(path, ekey=None, auto_ekey=True, authst=None, uin=None):
         info["kind"] = footer.kind
         info["cipher"] = cipher.kind
         info["song_id"] = footer.song_id
+        info["mid"] = footer.mid
         info["audio_bytes"] = footer.audio_len
         info["key_bytes"] = len(getattr(cipher, "key", b""))
 

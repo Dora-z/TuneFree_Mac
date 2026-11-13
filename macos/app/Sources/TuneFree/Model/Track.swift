@@ -26,6 +26,12 @@ struct Track: Identifiable, Equatable {
     var format: String = ""     // flac / ogg
     var needsLogin = false      // musicex 且没读到登录态
     var decryptedPath: String?  // 解密产物（转码阶段用它对上号）
+    var metaTitle: String?      // 写进文件的最终标签（联网补全或本地）
+    var metaArtist: String?
+    var album: String?
+    var year: String?
+    var coverPath: String?
+    var onlineTagged = false
     var outputPath: String?     // 最终产物
     var status: TrackStatus = .pending
 
@@ -46,6 +52,9 @@ struct Track: Identifiable, Equatable {
             self.title = stem
         }
     }
+
+    var displayTitle: String { (metaTitle?.isEmpty == false ? metaTitle : nil) ?? title }
+    var displayArtist: String { (metaArtist?.isEmpty == false ? metaArtist : nil) ?? artist }
 
     var displayFormat: String {
         let f = format.isEmpty ? Track.guessFormat(ext) : format
@@ -87,7 +96,7 @@ struct Track: Identifiable, Equatable {
     }
 
     var initials: String {
-        let base = title.isEmpty ? fileName : title
+        let base = displayTitle.isEmpty ? fileName : displayTitle
         return String(base.prefix(1))
     }
 }

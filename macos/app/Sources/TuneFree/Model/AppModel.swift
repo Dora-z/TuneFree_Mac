@@ -77,6 +77,8 @@ final class AppModel {
     var verify: Bool { didSet { save() } }
     var fillTags: Bool { didSet { save() } }
     var force: Bool { didSet { save() } }
+    var onlineTags: Bool { didSet { save() } }
+    var writeLrc: Bool { didSet { save() } }
 
     // 运行状态
     var stage: String = ""          // 解密 / 转码
@@ -111,6 +113,8 @@ final class AppModel {
         verify = d.object(forKey: "verify") as? Bool ?? true
         fillTags = d.object(forKey: "fillTags") as? Bool ?? true
         force = d.object(forKey: "force") as? Bool ?? false
+        onlineTags = d.object(forKey: "onlineTags") as? Bool ?? true
+        writeLrc = d.object(forKey: "writeLrc") as? Bool ?? false
         if let p = d.string(forKey: "outputPath") {
             outputURL = URL(fileURLWithPath: p)
         } else {
@@ -130,6 +134,8 @@ final class AppModel {
         defaults.set(verify, forKey: "verify")
         defaults.set(fillTags, forKey: "fillTags")
         defaults.set(force, forKey: "force")
+        defaults.set(onlineTags, forKey: "onlineTags")
+        defaults.set(writeLrc, forKey: "writeLrc")
     }
 
     // MARK: - 统计
@@ -139,6 +145,7 @@ final class AppModel {
     var doneCount: Int { tracks.filter { $0.status == .done || $0.status == .skipped }.count }
     var failedCount: Int { tracks.filter(\.status.isFailure).count }
     var needsLoginCount: Int { tracks.filter(\.needsLogin).count }
+    var onlineTaggedCount: Int { tracks.filter(\.onlineTagged).count }
 
     var isBusy: Bool { phase == .running || phase == .scanning }
 
@@ -270,6 +277,12 @@ final class AppModel {
             tracks[i].status = .pending
             tracks[i].decryptedPath = nil
             tracks[i].outputPath = nil
+            tracks[i].metaTitle = nil
+            tracks[i].metaArtist = nil
+            tracks[i].album = nil
+            tracks[i].year = nil
+            tracks[i].coverPath = nil
+            tracks[i].onlineTagged = false
         }
         summary = nil
         logs = []
@@ -290,6 +303,8 @@ final class AppModel {
         if verify { args.append("--verify") }
         if !fillTags { args.append("--no-tags") }
         if force { args.append("--force") }
+        if !onlineTags { args.append("--no-online-tags") }
+        if writeLrc { args.append("--lrc") }
 
         markActive(stage: "解密", file: tracks.first?.fileName ?? "")
 
@@ -376,6 +391,19 @@ final class AppModel {
             }
             stage = "转码"
             markActive(stage: "转码", file: "")
+        case "tags":
+            if let src = ev["input"] as? String, let i = indexForDecrypted(src) {
+                func str(_ key: String) -> String? {
+                    let v = ev[key] as? String ?? ""
+                    return v.isEmpty ? nil : v
+                }
+                tracks[i].metaTitle = str("title")
+                tracks[i].metaArtist = str("artist")
+                tracks[i].album = str("album")
+                tracks[i].year = str("year")
+                tracks[i].coverPath = str("cover")
+                tracks[i].onlineTagged = ev["online"] as? Bool ?? false
+            }
         case "transcode-fail":
             if let src = ev["input"] as? String, let i = indexForDecrypted(src) {
                 tracks[i].status = .failed(ev["message"] as? String ?? "转码失败")

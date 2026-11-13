@@ -96,6 +96,9 @@ def build_parser():
     parser.add_argument("--ffmpeg", help="手动指定 ffmpeg 路径")
     parser.add_argument("--no-tags", action="store_true",
                         help="不从文件名回填 歌名/歌手 标签（默认会补全缺失的标签）")
+    parser.add_argument("--no-online-tags", action="store_true",
+                        help="不联网补全标签（默认会按歌曲 ID 向 QQ音乐查封面、专辑、年份、歌词）")
+    parser.add_argument("--lrc", action="store_true", help="另存一份 .lrc 同步歌词（与 MP3 同名）")
     parser.add_argument("--verify", action="store_true", help="解密/转码后校验音频容器完整性")
     parser.add_argument("--json", action="store_true", help="以 JSON 行输出事件（前端解析用）")
     parser.add_argument("--info", action="store_true", help="只探查文件尾部结构，不解密")
@@ -221,6 +224,8 @@ def main(argv=None):
         uin=args.uin,
         verify_output=args.verify,
         tag_from_filename=not args.no_tags,
+        online_tags=not args.no_online_tags,
+        write_lrc=args.lrc,
         ffmpeg_path=args.ffmpeg,
     )
 
