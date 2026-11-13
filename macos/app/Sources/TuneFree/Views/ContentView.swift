@@ -43,7 +43,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 1000, minHeight: 660)
         .dropDestination(for: URL.self) { urls, _ in
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { model.handleDrop(urls) }
+            model.handleDrop(urls)   // 动画由 .animation(value: phase) 负责
         } isTargeted: { dropTargeted = $0 }
         .animation(.spring(response: 0.55, dampingFraction: 0.88), value: model.phase)
         .alert("出错了", isPresented: .init(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
@@ -74,16 +74,23 @@ struct ContentView: View {
                         }
                     }
 
-                Group {
-                    if model.phase == .running {
-                        ProgressDock()
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else if model.phase == .finished {
-                        SummaryView()
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                // 进度条常驻、用透明度切换：if/else 里带 transition 的写法在任务很快结束时
+                // 会卡在过渡中途（进度条不消失、结果卡片不出现）
+                let running = model.phase == .running
+                ProgressDock()
+                    .opacity(running ? 1 : 0)
+                    .offset(y: running ? 0 : 24)
+                    .allowsHitTesting(running)
+                    .accessibilityHidden(!running)
+                    .padding(14)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.9), value: running)
+
+                if model.phase == .finished {
+                    SummaryView()
+                        .padding(14)
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                                                removal: .opacity))
                 }
-                .padding(14)
             }
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }

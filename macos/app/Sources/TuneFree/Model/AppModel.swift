@@ -411,32 +411,38 @@ final class AppModel {
 
     private func finish(code: Int32) {
         process = nil
-        for i in tracks.indices {
-            switch tracks[i].status {
-            case .decrypting: tracks[i].status = .pending
-            case .transcoding: tracks[i].status = .decrypted
+        let wasCancelled = code == 130 || cancelling
+
+        // 先在本地算好，再一次性写回：在 withAnimation 里改 phase 会先同步冲刷前面的改动，
+        // 偶发导致主界面收不到 phase 的变化（进度条卡住、结果卡片不出现）
+        var updated = tracks
+        for i in updated.indices {
+            switch updated[i].status {
+            case .decrypting: updated[i].status = .pending
+            case .transcoding: updated[i].status = .decrypted
             default: break
             }
             // 只要无损：解密完就算完成
-            if outputMode == .lossless, tracks[i].status == .decrypted { tracks[i].status = .done }
+            if outputMode == .lossless, updated[i].status == .decrypted { updated[i].status = .done }
         }
-        if summary == nil {
+        var s = summary ?? {
             var s = RunSummary()
-            s.found = tracks.count
-            s.cancelled = code == 130 || cancelling
+            s.found = updated.count
             s.elapsed = Date().timeIntervalSince(startedAt ?? Date())
             if code != 0 && code != 130 {
                 s.errors.append(("", "backend", "exit", "后端异常退出（退出码 \(code)），详见日志"))
             }
-            summary = s
-        }
-        if code == 130 || cancelling { summary?.cancelled = true }
+            return s
+        }()
+        if wasCancelled { s.cancelled = true }
+
+        tracks = updated
+        summary = s
         stageDone = stageTotal
         cancelling = false
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-            phase = .finished
-        }
-        if summary?.cancelled != true {
+        phase = .finished   // 动画由 ContentView 的 .animation(value: phase) 负责
+
+        if !wasCancelled {
             NSApp.requestUserAttention(.informationalRequest)
             NSSound(named: "Glass")?.play()
         }

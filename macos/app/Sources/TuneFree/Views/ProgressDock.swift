@@ -20,7 +20,7 @@ struct ProgressDock: View {
                         .foregroundStyle(Theme.textSecondary)
                         .contentTransition(.numericText())
                     Spacer()
-                    if let start = model.startedAt {
+                    if let start = model.startedAt, model.phase == .running {
                         TimelineView(.periodic(from: start, by: 1)) { ctx in
                             Text(elapsed(ctx.date.timeIntervalSince(start)))
                                 .font(.system(size: 12, weight: .medium, design: .monospaced))
@@ -28,7 +28,7 @@ struct ProgressDock: View {
                         }
                     }
                 }
-                GlowBar(progress: model.overallProgress)
+                GlowBar(progress: model.overallProgress, active: model.phase == .running)
                     .frame(height: 6)
                 Text(model.activeFileName.isEmpty ? "准备中…" : model.activeFileName)
                     .font(.system(size: 11.5))
@@ -72,6 +72,7 @@ struct ProgressRing: View {
 
 struct GlowBar: View {
     let progress: Double
+    var active = true
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -81,7 +82,7 @@ struct GlowBar: View {
                     .frame(width: max(6, geo.size.width * progress))
                     .shadow(color: Theme.accent2.opacity(0.8), radius: 8)
                     .overlay(alignment: .trailing) {
-                        TimelineView(.animation) { ctx in
+                        TimelineView(.animation(minimumInterval: nil, paused: !active)) { ctx in
                             let t = ctx.date.timeIntervalSinceReferenceDate
                             Circle()
                                 .fill(.white)
