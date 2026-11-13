@@ -104,7 +104,31 @@ class MatchTest(unittest.TestCase):
 
     def test_歌手不对就不用(self):
         hints = meta.Hints(title="晴天", artist="周杰伦", duration=200)
-        self.assertFalse(meta.plausible(self._meta("晴天", ["翻唱歌手"]), hints))
+        self.assertFalse(meta.plausible(self._meta("晴天", ["翻唱歌手"], by="search"), hints))
+        # 按文件自带 song_id 查到的也一样：时长差得多就不信
+        self.assertFalse(meta.plausible(self._meta("晴天", ["翻唱歌手"], duration=205), hints))
+
+    def test_自带song_id时长一样_歌名或歌手对上一个就行(self):
+        # 歌手改名 / 别名
+        hints = meta.Hints(title="小情歌", artist="鱼丁糸", duration=276.6)
+        self.assertTrue(meta.plausible(self._meta("小情歌", ["苏打绿"], 276.0), hints))
+        # 文件标签里歌名有错字
+        hints = meta.Hints(title="你来自那颗星", artist="陈柏宇", duration=214.0)
+        self.assertTrue(meta.plausible(self._meta("你来自哪颗星", ["陈柏宇"], 214.0), hints))
+        # 搜索来的不享受这个放宽
+        self.assertFalse(meta.plausible(self._meta("小情歌", ["苏打绿"], 276.0, by="search"),
+                                        meta.Hints(title="小情歌", artist="鱼丁糸", duration=276.6)))
+        # 歌名歌手都不对：song_id 再准也不用
+        self.assertFalse(meta.plausible(self._meta("别的歌", ["某人"], 200.0),
+                                        meta.Hints(title="晴天", artist="周杰伦", duration=200.0)))
+
+    def test_组合名与括号别名(self):
+        self.assertTrue(meta.artists_overlap(["Robynn & Kendy"], "Robynn & Kendy"))
+        self.assertTrue(meta.artists_overlap(["伍佰 & China Blue"], "伍佰 & China Blue"))
+        self.assertTrue(meta.artists_overlap(["KOKIA"], "KOKIA (吉田亚纪子)"))
+        self.assertTrue(meta.artists_overlap(["KOKIA (吉田亚纪子)"], "吉田亚纪子"))
+        self.assertTrue(meta.artists_overlap(["张震岳", "蔡健雅"], "张震岳,蔡健雅"))
+        self.assertFalse(meta.artists_overlap(["周杰伦"], "林俊杰"))
 
     def test_时长差太多就不用(self):
         hints = meta.Hints(title="晴天", artist="周杰伦", duration=100)

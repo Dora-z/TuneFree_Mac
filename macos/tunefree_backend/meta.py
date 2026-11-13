@@ -29,6 +29,8 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 TIMEOUT = 8
 
 DURATION_TOLERANCE = 6.0      # 秒；同一首歌不同版本的时长差一般远大于这个
+# 文件自带 song_id 且时长几乎一样时，歌名、歌手对上一个就够（歌手改过名 / 别名 / 文件标签有错字）
+ID_DURATION_TOLERANCE = 2.0
 
 
 class TrackMeta(object):
@@ -115,10 +117,27 @@ def split_artists(text):
     return [part for part in (p.strip() for p in _ARTIST_SPLIT.split(text or "")) if part]
 
 
+_BRACKET_INNER = re.compile(r"[\(（\[【<《](.*?)[\)）\]】>》]")
+
+
+def _artist_keys(names):
+    """一组歌手名能对上的写法：整串、拆开后的每个人、括号外 / 括号里的名字。
+
+    「Robynn & Kendy」是一个组合名，不能只按 & 拆开比；
+    「KOKIA (吉田亚纪子)」括号里是另一个名字，两边都算。
+    """
+    keys = set()
+    for name in names:
+        for part in [name] + split_artists(name):
+            for variant in [part, _BRACKETS.sub("", part)] + _BRACKET_INNER.findall(part):
+                key = _norm(variant)
+                if key:
+                    keys.add(key)
+    return keys
+
+
 def artists_overlap(found, wanted):
-    a = {_norm(x) for x in found if _norm(x)}
-    b = {_norm(x) for x in split_artists(wanted) if _norm(x)}
-    return bool(a & b)
+    return bool(_artist_keys(found) & _artist_keys([wanted]))
 
 
 def plausible(meta, hints):
@@ -128,11 +147,15 @@ def plausible(meta, hints):
     if hints.duration and meta.duration and abs(hints.duration - meta.duration) > DURATION_TOLERANCE:
         return False
     if hints.title:
-        if not title_matches(meta.title, hints.title):
-            return False
-        if hints.artist and not artists_overlap(meta.artists, hints.artist):
-            return False
-        return True
+        title_ok = title_matches(meta.title, hints.title)
+        artist_hit = bool(hints.artist) and artists_overlap(meta.artists, hints.artist)
+        if title_ok and (artist_hit or not hints.artist):
+            return True
+        # 文件尾部的 song_id 是 QQ音乐下载时写进去的，就是这首歌本身；
+        # 时长几乎一样时，歌名或歌手有一个对上就信它（另一个多半是别名、改名或标签错字）
+        same_length = bool(hints.duration and meta.duration
+                           and abs(hints.duration - meta.duration) <= ID_DURATION_TOLERANCE)
+        return meta.matched_by == "song_id" and same_length and (title_ok or artist_hit)
     # 文件里一点歌名线索都没有：只信 song_id，且时长必须对得上
     return bool(meta.matched_by == "song_id" and hints.duration and meta.duration)
 
