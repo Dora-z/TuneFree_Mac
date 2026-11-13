@@ -204,7 +204,7 @@ QQ音乐的缓存文件经常不带标签（`.mgg` 里常常一个标签都没�
 
 ## 打包发布
 
-推荐发图形界面版：`bash app/build.sh` → `dist/TuneFree.app` + DMG，内置 Python 运行时和 ffmpeg，
+推荐发图形界面版：`bash app/build.sh` → `dist/<架构>/TuneFree.app` + 每种芯片一个 DMG，内置 Python 运行时和 ffmpeg，
 详见 [app/README.md](app/README.md)。
 
 不要界面的话，`bash ship/build_app.sh` 会打一个命令行版 zip（双击 `TuneFree.command`，
@@ -212,7 +212,8 @@ QQ音乐的缓存文件经常不带标签（`.mgg` 里常常一个标签都没�
 
 两种包都需要注意：
 
-1. **架构**：在 Apple 芯片上打的包只给 arm64 用；Intel 版要在 Intel Mac 上重打。
+1. **架构**：`app/build.sh` 默认同时打 arm64 和 x86_64（Intel 版在 Apple 芯片上借助 Rosetta 交叉打包）；
+   `ship/build_app.sh` 的命令行版只打构建机自己的架构。
 2. **签名**：没有开发者证书时是 ad-hoc 签名，首次打开要右键 → 打开。
 3. **账号绑定**：`musicex` 文件的密钥绑定下载它的那个账号，别人转发的这类文件解不开；
    `QTag` / `V1` / QMC1 的文件不受影响。

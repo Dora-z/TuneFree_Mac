@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Dora-z/TuneFree_Mac/releases/latest"><img src="https://img.shields.io/github/v/release/Dora-z/TuneFree_Mac?color=2ea043&label=release" alt="Release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-6e7781" alt="Apple Silicon">
+  <img src="https://img.shields.io/badge/chip-Apple%20Silicon%20%7C%20Intel-6e7781" alt="Apple Silicon | Intel">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Dora-z/TuneFree_Mac?color=8957e5" alt="License"></a>
 </p>
 
@@ -42,7 +42,10 @@ TuneFree restores them to plain audio on your own Mac and converts them to `MP3`
 
 ## Three steps
 
-1. Download the [`TuneFree-…-arm64.dmg`](https://github.com/Dora-z/TuneFree_Mac/releases/latest) and drag TuneFree into Applications
+1. From [Releases](https://github.com/Dora-z/TuneFree_Mac/releases/latest), download the DMG for your chip and drag TuneFree into Applications
+   - Apple silicon (M1 / M2 / M3 / M4…): `TuneFree-…-arm64.dmg`
+   - Intel: `TuneFree-…-x86_64.dmg`
+   - Not sure? Apple menu → About This Mac: "Chip: Apple …" means Apple silicon, "Processor: Intel …" means Intel
 2. Open TuneFree and drop the folder with your encrypted songs onto the window (or click "打开 QQ音乐缓存" to load QQ Music's download folder)
 3. Pick output format and bitrate, press **Start**, then "Open in Finder" when it's done
 
@@ -60,7 +63,7 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Apple silicon (M1 or later). For Intel Macs, [build from source](#build-from-source) on an Intel machine
+- Apple silicon or Intel Macs (separate `arm64` / `x86_64` downloads)
 - Files in the newer `musicex` layout need QQ Music to have been **logged in on this Mac** (it doesn't need to be running)
 
 ## First launch
@@ -80,7 +83,8 @@ Needs only the Xcode Command Line Tools (`xcode-select --install`):
 ```bash
 git clone https://github.com/Dora-z/TuneFree_Mac.git
 cd TuneFree_Mac/macos
-bash app/build.sh          # → dist/TuneFree.app and dist/TuneFree-<version>-<arch>.dmg
+bash app/build.sh                 # both chips → dist/<arch>/TuneFree.app and dist/TuneFree-<version>-<arch>.dmg
+bash app/build.sh --arch x86_64   # Intel only (cross-built via Rosetta on Apple silicon)
 ```
 
 CLI usage, the `--json` event protocol and the Python API are documented in [macos/README.md](macos/README.md) (Chinese).

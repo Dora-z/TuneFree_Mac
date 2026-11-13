@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Dora-z/TuneFree_Mac/releases/latest"><img src="https://img.shields.io/github/v/release/Dora-z/TuneFree_Mac?color=2ea043&label=release" alt="Release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Apple%20芯片-arm64-6e7781" alt="Apple Silicon">
+  <img src="https://img.shields.io/badge/芯片-Apple%20芯片%20%7C%20Intel-6e7781" alt="Apple 芯片 | Intel">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Dora-z/TuneFree_Mac?color=8957e5" alt="License"></a>
 </p>
 
@@ -42,7 +42,10 @@ QQ音乐下载的部分歌曲是加密容器，只有 QQ音乐自己能放：
 
 ## 三步就能用
 
-1. 下载 [`TuneFree-…-arm64.dmg`](https://github.com/Dora-z/TuneFree_Mac/releases/latest)，把 TuneFree 拖进「应用程序」
+1. 到 [Releases](https://github.com/Dora-z/TuneFree_Mac/releases/latest) 下载对应芯片的安装包，打开后把 TuneFree 拖进「应用程序」
+   - Apple 芯片（M1 / M2 / M3 / M4…）：`TuneFree-…-arm64.dmg`
+   - Intel 芯片：`TuneFree-…-x86_64.dmg`
+   - 不确定的话：点屏幕左上角的苹果菜单 →「关于本机」，「芯片」写着 Apple 就是 Apple 芯片，「处理器」写着 Intel 就是 Intel
 2. 打开 TuneFree，把放着加密歌曲的文件夹拖进窗口（或点「打开 QQ音乐缓存」）
 3. 选好输出格式和音质，点 **开始转换**，完成后点「在 Finder 中打开」
 
@@ -64,7 +67,7 @@ App 里自带 Python 运行时和 ffmpeg，**不需要另外安装任何东西**
 ## 系统要求
 
 - macOS 14 (Sonoma) 或更新
-- Apple 芯片（M1 及以后）。Intel Mac 需要自己在 Intel 机器上[从源码打包](#从源码构建)
+- Apple 芯片或 Intel 芯片的 Mac 都支持（分别下载 `arm64` / `x86_64` 安装包）
 - 新版 QQ音乐下载的 `musicex` 格式需要这台 Mac **登录过 QQ音乐**（不用开着，见下方说明）
 
 ## 第一次打开
@@ -103,7 +106,8 @@ App 没有经过 Apple 公证，第一次打开会提示「无法验证开发者
 ```bash
 git clone https://github.com/Dora-z/TuneFree_Mac.git
 cd TuneFree_Mac/macos
-bash app/build.sh          # → dist/TuneFree.app 与 dist/TuneFree-<版本>-<架构>.dmg
+bash app/build.sh                 # 两种芯片都打 → dist/<架构>/TuneFree.app 与 dist/TuneFree-<版本>-<架构>.dmg
+bash app/build.sh --arch x86_64   # 只打 Intel 版（在 Apple 芯片上会借助 Rosetta 交叉打包）
 ```
 
 只想用命令行：

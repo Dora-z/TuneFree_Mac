@@ -7,14 +7,16 @@
 
 ```bash
 cd macos
-bash app/build.sh                  # → dist/TuneFree.app 与 dist/TuneFree-<版本>-<架构>.dmg
-bash app/build.sh --reuse-backend  # 后端没改时，跳过 PyInstaller，快很多
-bash app/build.sh --no-dmg         # 只要 .app
+bash app/build.sh                    # 两种芯片都打 → dist/<架构>/TuneFree.app 与 dist/TuneFree-<版本>-<架构>.dmg
+bash app/build.sh --arch arm64       # 只打 Apple 芯片版
+bash app/build.sh --arch x86_64      # 只打 Intel 版
+bash app/build.sh --reuse-backend    # 后端没改时，跳过 PyInstaller，快很多
+bash app/build.sh --no-dmg           # 只要 .app
 ```
 
 只需要 Xcode 命令行工具（`xcode-select --install`）。脚本会：
 
-1. 用 PyInstaller 把后端打成 `TuneFreeBackend/`（内置 Python 3.9 运行时），再塞一份静态 ffmpeg；
+1. 用 PyInstaller 把后端打成 `TuneFreeBackend/`（内置 Python 运行时：arm64 用 3.9，x86_64 用 3.12），再塞一份静态 ffmpeg；
 2. `swift build -c release` 编界面。新版 SDK 的 `@State` 是宏、宏插件只随完整 Xcode 提供，
    所以没有 Xcode 时脚本会自动挑一个能编过的 SDK；
 3. 画图标（`Support/make_icon.swift`）、组装 `.app`、由内到外签名、跑一遍包内自检、做 DMG。
@@ -22,7 +24,18 @@ bash app/build.sh --no-dmg         # 只要 .app
 签名默认是 ad-hoc。别人第一次打开要「右键 → 打开」（或 系统设置 → 隐私与安全性 → 仍要打开）。
 有开发者证书时：`CODESIGN_ID="Developer ID Application: …" bash app/build.sh`，会开启 hardened runtime，之后可以去公证。
 
-产物只适用于构建机的 CPU 架构（Apple 芯片打出来就是 arm64）。
+### 两种芯片
+
+每种芯片单独一个包（不做通用二进制，单个下载更小）：arm64 版约 26 MB，x86_64 版约 38 MB（Intel 版 ffmpeg 更大）。
+
+- **界面**：`swift build --arch <架构>` 直接交叉编译。
+- **后端**：PyInstaller 只能打「运行它的那个 Python」的架构。arm64 默认用系统 `python3`；
+  x86_64 默认用 [uv](https://github.com/astral-sh/uv) 管理的独立版 CPython 3.12
+  （没有就自动 `uv python install cpython-3.12-macos-x86_64-none`），在 Rosetta 下运行。
+  也可以用 `BUILD_PYTHON_ARM64=…` / `BUILD_PYTHON_X86_64=…` 指定解释器。
+- 在 Apple 芯片上交叉打 Intel 版需要 Rosetta（`softwareupdate --install-rosetta`），包内自检也在 Rosetta 下跑。
+  脚本会给 `lipo` 等工具套一层，让它们原生运行（命令行工具的 `libxcrun` 只有 arm64）。
+- 每个包组装后都会检查主程序、后端和 ffmpeg 的架构是否对得上。
 
 ## 开发
 
