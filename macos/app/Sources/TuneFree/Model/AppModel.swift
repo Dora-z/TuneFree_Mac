@@ -109,7 +109,13 @@ final class AppModel {
     // 选项（持久化）
     var outputMode: OutputMode { didSet { save() } }
     var bitrate: Int { didSet { save() } }
-    var jobs: Int { didSet { save() } }
+    /// 并行转码数。只在用户自己改过时才记下来，没改过就一直跟着「CPU 核心数的一半」走
+    var jobs: Int { didSet { defaults.set(jobs, forKey: "parallelJobs") } }
+
+    /// 默认并行数：CPU 核心数的一半（至少 1）
+    static var defaultJobs: Int { max(1, ProcessInfo.processInfo.activeProcessorCount / 2) }
+    /// 并行数上限：核心数，至少 8
+    static var maxJobs: Int { max(8, ProcessInfo.processInfo.activeProcessorCount) }
     var verify: Bool { didSet { save() } }
     var fillTags: Bool { didSet { save() } }
     var force: Bool { didSet { save() } }
@@ -258,7 +264,14 @@ final class AppModel {
         let d = UserDefaults.standard
         outputMode = OutputMode(rawValue: d.string(forKey: "outputMode") ?? "") ?? .mp3
         bitrate = d.object(forKey: "bitrate") as? Int ?? 320
-        jobs = d.object(forKey: "jobs") as? Int ?? 2
+        if let saved = d.object(forKey: "parallelJobs") as? Int {
+            jobs = min(max(saved, 1), AppModel.maxJobs)
+        } else if let old = d.object(forKey: "jobs") as? Int, old != 2 {
+            // 旧版每次改任何选项都会把并行数一起存下（默认 2）；不是 2 的才是用户自己调过的
+            jobs = min(max(old, 1), AppModel.maxJobs)
+        } else {
+            jobs = AppModel.defaultJobs
+        }
         verify = d.object(forKey: "verify") as? Bool ?? true
         fillTags = d.object(forKey: "fillTags") as? Bool ?? true
         force = d.object(forKey: "force") as? Bool ?? false
@@ -287,7 +300,6 @@ final class AppModel {
     private func save() {
         defaults.set(outputMode.rawValue, forKey: "outputMode")
         defaults.set(bitrate, forKey: "bitrate")
-        defaults.set(jobs, forKey: "jobs")
         defaults.set(verify, forKey: "verify")
         defaults.set(fillTags, forKey: "fillTags")
         defaults.set(force, forKey: "force")

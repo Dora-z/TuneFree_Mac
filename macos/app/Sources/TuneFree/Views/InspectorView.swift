@@ -103,7 +103,7 @@ struct InspectorView: View {
                                         Text("同时处理的歌曲数").font(.system(size: 10.5)).foregroundStyle(Theme.textTertiary)
                                     }
                                     Spacer()
-                                    Stepper(value: $model.jobs, in: 1...8) {
+                                    Stepper(value: $model.jobs, in: 1...AppModel.maxJobs) {
                                         Text("\(model.jobs)")
                                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                                             .monospacedDigit()
