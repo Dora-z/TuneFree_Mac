@@ -1,31 +1,40 @@
-# `TuneFree`
+<p align="center">
+  <img src="assets/icon.png" width="128" alt="TuneFree icon">
+</p>
 
-**Turn the encrypted songs you downloaded in QQ Music (`.mflac` / `.mgg`) into `MP3` or `FLAC` that any player can open.**
+<h1 align="center">TuneFree for Mac</h1>
 
-[![Release](https://img.shields.io/github/v/release/zksbx/TuneFree?color=2ea043&label=release)](https://github.com/zksbx/TuneFree/releases/latest)
-[![Downloads](https://img.shields.io/badge/downloads-3.6k%2B-3b82f6)](https://wwbtj.lanzouc.com/b01d7csi8j)
-[![Stars](https://img.shields.io/github/stars/zksbx/TuneFree?color=e3b341)](https://github.com/zksbx/TuneFree/stargazers)
-[![License](https://img.shields.io/github/license/zksbx/TuneFree?color=8957e5)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-6e7781)](README.en.md#requirements)
+<p align="center">
+  <b>Turn encrypted QQ Music downloads (<code>.mflac</code> / <code>.mgg</code>) into <code>MP3</code> / <code>FLAC</code> that any player can open.</b><br>
+  Native macOS app · decrypts locally · QQ Music doesn't need to be running
+</p>
 
-No membership tricks, no uploading — everything happens on your own computer.
+<p align="center">
+  <a href="https://github.com/Dora-z/TuneFree_Mac/releases/latest"><img src="https://img.shields.io/github/v/release/Dora-z/TuneFree_Mac?color=2ea043&label=release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-6e7781" alt="Apple Silicon">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Dora-z/TuneFree_Mac?color=8957e5" alt="License"></a>
+</p>
 
-[⬇️ Download latest](https://github.com/zksbx/TuneFree/releases/latest) · [🌐 Website & help](https://zksbx.github.io/TuneFree/tunefree.en.html) · [☁️ Lanzou mirror](https://wwbtj.lanzouc.com/b01d7csi8j) (access code `0211`) · 💬 QQ group: 1067975918 · [中文 README](README.md)
+<p align="center">
+  <a href="https://github.com/Dora-z/TuneFree_Mac/releases/latest"><b>⬇️ Download</b></a> · <a href="README.md">中文</a>
+</p>
 
----
+<p align="center">
+  <img src="assets/screenshot-library.png" width="860" alt="TuneFree main window">
+</p>
 
-## What problem does it solve
+## What it does
 
-Some tracks downloaded in QQ Music come in encrypted containers:
+Some tracks downloaded in QQ Music come in encrypted containers that only QQ Music can play:
 
-| Extension | What it really is | Typical case |
-|---|---|---|
-| `.mflac` | encrypted `FLAC` (lossless) | lossless downloads |
-| `.mgg` | encrypted `OGG` | some licensed tracks |
+| Extension | What it really is |
+|---|---|
+| `.mflac` / `.mflac0` | encrypted `FLAC` (lossless) |
+| `.mgg` / `.mgg1` / `.mggl` | encrypted `OGG` |
+| `.qmcflac` / `.qmcogg` / `.qmc0` / `.qmc3` | older client formats |
 
-Only QQ Music can play these. Copy one to a car stereo, an MP3 player or any other player and all you get is "unsupported format".
-
-TuneFree does something simple: **it calls QQ Music's own decryption function inside the running process**, restores the file to a normal `FLAC`/`OGG`, then converts it to `MP3` with `FFmpeg`.
+TuneFree restores them to plain audio on your own Mac and converts them to `MP3`:
 
 ```
 .mflac / .mgg  ──decrypt──▶  .flac / .ogg  ──encode──▶  .mp3
@@ -33,159 +42,62 @@ TuneFree does something simple: **it calls QQ Music's own decryption function in
 
 ## Three steps
 
-1. **Open QQ Music and log in**, keep it running (you don't need to play anything)
-2. Double-click `TuneFree.exe`, pick the folder holding your `.mflac` or `.mgg` files
-3. Press **Start**, wait for the progress bar, collect the `MP3`s from the output folder
+1. Download the [`TuneFree-…-arm64.dmg`](https://github.com/Dora-z/TuneFree_Mac/releases/latest) and drag TuneFree into Applications
+2. Open TuneFree and drop the folder with your encrypted songs onto the window (or click "打开 QQ音乐缓存" to load QQ Music's download folder)
+3. Pick output format and bitrate, press **Start**, then "Open in Finder" when it's done
 
-Output files keep the original names, so you can copy them straight onto a phone or car stereo.
-
-## Support the author
-
-`TuneFree` is completely free — no ads, no feature gates, no paid tier. If it genuinely helped you, you can buy the author a milk tea:
-
-<p align="center">
-  <img src="docs/support.png" alt="Left: WeChat tip QR, right: Alipay tip QR" width="560">
-</p>
-
-No money is fine too — [leave a star](https://github.com/zksbx/TuneFree) or tell someone who needs it. That helps just as much.
-
-## Is it a virus? Read this first
-
-The previous release **v2.0.0** shipped on **2026-06-30** and had been downloaded **3,660 times** on Lanzou by **2026-10-31** (the counter comes from Lanzou's own backend — the author cannot edit it). Thousands of people have installed and used it; something genuinely malicious would not stay quiet that long.
-
-<p align="center">
-  <a href="docs/downloads.png"><img src="docs/downloads.png" alt="Lanzou backend screenshot (2026-10-31): TuneFree-2.0.0.exe, 3,660 downloads" width="760"></a>
-</p>
-
-Your antivirus will still complain, and that is expected: TuneFree injects code into the QQ Music process with Frida, which is exactly what malware does. The difference is that the entire source is public — you can read every line of what it does.
+The app bundles its own Python runtime and ffmpeg — **nothing else to install**.
 
 ## Features
 
-- 🎵 Batch decryption of `.mflac` / `.mgg`, walks subfolders automatically
-- 🎚 Three output modes: MP3 only, lossless FLAC only, or keep both
-- ⚡ Resume friendly: a run that was interrupted skips finished files next time
-- 📊 Live progress bar — you can see which step is stuck
-- 🔔 Built-in update check
-- 🔒 Offline: apart from the update check it contacts no server at all
+- 🎵 Batch processing, walks subfolders
+- 🎚 MP3 only / MP3 + lossless FLAC / lossless only; MP3 at 128k, 192k or 320k
+- 🏷 Fills in missing title/artist tags from the `Artist-Title` file name
+- ✅ Optional container checks (OGG page CRC, FLAC STREAMINFO, MP3 frame headers)
+- ⚡ Skips songs already converted; parallel encoding
+- 📋 Live per-track status, failure reasons with suggestions, full log
 
 ## Requirements
 
-- Windows 10 / 11 (64-bit)
-- QQ Music client (logged in — decryption borrows its key)
-- **Only the `Standard` / `HQ` / `SQ` quality tiers are supported.** Tracks downloaded as Hi-Res (臻品音质), Master (臻品母带) or Dolby Atmos are not supported and will fail to decrypt.
+- macOS 14 (Sonoma) or later
+- Apple silicon (M1 or later). For Intel Macs, [build from source](#build-from-source) on an Intel machine
+- Files in the newer `musicex` layout need QQ Music to have been **logged in on this Mac** (it doesn't need to be running)
+
+## First launch
+
+The app isn't notarized, so macOS blocks it the first time: in Applications, **right-click TuneFree → Open → Open**. If it still won't open, go to System Settings → Privacy & Security and click "Open Anyway". You only do this once.
 
 ## FAQ
 
-### "Windows protected your PC" — a blue window blocks it from running
+**"Can't get key" / "login expired"** — `musicex` files don't carry their key. TuneFree reads QQ Music's local login state and asks QQ Music's official API for that song's key. Log in to QQ Music once, then press "再次转换" (Convert again). Files forwarded from someone else can't be decrypted, because the key is bound to the account that downloaded them.
 
-That is SmartScreen's "unknown publisher" warning, not a virus detection — an unsigned exe is blocked the first time, always.
+**Does it upload my music?** No. The only network request is the key lookup for `musicex` files; everything else is fully offline.
 
-Two ways out:
+## Build from source
 
-1. **Before unzipping (recommended)**: right-click the zip → Properties → tick **Unblock** at the bottom of the General tab → Apply, then unzip. The extracted files are no longer marked as "from the internet" and will never prompt again.
-2. **Already unzipped**: in the blue window click **More info**, then **Run anyway** at the bottom right. Once per file is enough.
-
-The zip also ships a `!首次运行请看.txt`, but that file is only visible after unzipping, so it documents method 2 only (plus how to whitelist the app when antivirus blocks it).
-
-### My antivirus flags it as a virus
-
-The app uses Frida to inject code into the QQ Music process — behaviour that looks exactly like malware, so most antivirus products will report it.
-
-Fix: add the TuneFree folder to your antivirus trust list. The source is fully public, you can read every line.
-
-### "Please make sure the QQ Music client is running, then try again"
-
-Open QQ Music and log in first, then hit start. Decryption borrows the key from the QQ Music process; without it there is no key.
-
-### `invalid size` or "QQ Music version mismatch"
-
-QQ Music changed its internal function names, so the current build cannot inject into it.
-
-- Downgrade QQ Music to a known-good version, or
-- Wait for TuneFree to support the new release (watch Releases)
-
-### Decryption works, but every MP3 conversion fails
-
-Usually security software is preventing `ffmpeg.exe` from creating files. The app automatically retries through "pipe output + write the file itself", which normally gets through.
-
-If it still fails, add the TuneFree folder to your trust list.
-
-### A handful of songs simply won't convert
-
-Check the quality tier first. Only **Standard / HQ / SQ** are supported; if a song was downloaded as **Hi-Res (臻品音质), Master (臻品母带) or Dolby Atmos** it carries no normal audio stream, so conversion always fails — re-download it at SQ or lower and retry.
-
-If it is already Standard / HQ / SQ, some files need to be played once in QQ Music first so the full data lands in the local cache, then convert them.
-
-### Mac / Linux support?
-
-Windows only for now. The core logic is platform-independent, but the QQ Music client it injects into exists only on Windows.
-
-## Run from source
+Needs only the Xcode Command Line Tools (`xcode-select --install`):
 
 ```bash
-# 1. install dependencies
-pip install -r requirements.txt
-
-# 2. put ffmpeg.exe in this folder (the app looks for it here)
-#    Windows builds: https://www.gyan.dev/ffmpeg/builds/ (pick release essentials)
-
-# 3. launch the GUI
-python app.py
-
-# or use the command line (app.py and main.py both work)
-python app.py --cli -i "D:\downloads" -o "D:\music" -b 320k
-python main.py -i "D:\downloads" -o "D:\music" -b 320k
+git clone https://github.com/Dora-z/TuneFree_Mac.git
+cd TuneFree_Mac/macos
+bash app/build.sh          # → dist/TuneFree.app and dist/TuneFree-<version>-<arch>.dmg
 ```
 
-Command-line options:
+CLI usage, the `--json` event protocol and the Python API are documented in [macos/README.md](macos/README.md) (Chinese).
 
-| Option | Description |
-|---|---|
-| `-i, --input` | input folder, defaults to the current folder |
-| `-o, --output` | output folder, defaults to `./output` |
-| `--mp3-dir` / `--flac-dir` | set the `MP3` / `FLAC` output locations separately |
-| `-b, --bitrate` | `MP3` bitrate, default `192k` |
-| `--keep-flac` | keep the decrypted `FLAC` |
-| `--no-mp3` | output `FLAC` only, no `MP3` |
-| `--force` | rebuild `MP3`s that already exist |
-| `-v, --version` | print the version |
+## How it works
 
-## Project layout
-
-```
-app.py               single entry point: GUI with no args, CLI with --cli
-TuneFree.py          GUI (PySide6)
-main.py              CLI / backend: inject, decrypt, encode
-hook_qq_music.js     Frida injection script (the decryption core)
-version.py           single source of truth for the version and repo URL
-version.json         update source for mainland users (served via jsDelivr)
-TuneFree.spec        PyInstaller spec (produces exactly one TuneFree.exe)
-docs/                website (static single page)
-发版清单.md           release checklist (Chinese)
-```
+No process injection: the algorithms are reimplemented locally. The file footer yields the ekey → TC-TEA derives the key → QMC2's Map / RC4 cipher restores the audio; legacy QMC1 uses a fixed XOR table. Decryption runs at ~400–480 MB/s, then ffmpeg encodes.
 
 ## Disclaimer
 
-This tool is for **personal study and interoperability** only, used to decrypt music files you legitimately downloaded on this machine so you can play them on devices you own.
+For **personal study and use** only: decrypt music you legally downloaded, to play on devices you own. Do not use it for redistribution or commercial purposes. You are responsible for how you use it.
 
-Do not redistribute, re-share or use it commercially. Any legal consequences are the user's own.
+## License & credits
 
-## License
+[MIT License](LICENSE). The license covers the code; it does not change the usage limits above.
 
-The code is released under the [MIT License](LICENSE). Fork it, change it, build on it.
-
-One reminder: MIT covers the **code**. It does not loosen the limits on **how you may use it** described in the disclaimer above.
-
-## Credits
-
-- [Frida](https://frida.re/) — process injection
+- Based on [zksbx/TuneFree](https://github.com/zksbx/TuneFree) (the Windows version)
 - [FFmpeg](https://ffmpeg.org/) — audio encoding
-- [music-decryptor](https://github.com/ericjuice/music-decryptor) — where the decryption script started
-- [Unlock Music](https://github.com/unlock-music/unlock-music) — format parsing experience
-- [PyInstaller](https://pyinstaller.org/) — packaging
-
-## Support
-
-- 🐛 [Open an issue](https://github.com/zksbx/TuneFree/issues)
-- 💬 QQ group: 1067975918
-- ☕ [Afdian](https://ifdian.net/a/TuneFree)
+- [Unlock Music](https://github.com/unlock-music/unlock-music) — format research
+- [PyInstaller](https://pyinstaller.org/) — bundling the Python runtime

@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """TuneFree macOS 后端命令行（`tunefree` / `python main.py` 都走这里）。
 
-和 Windows 版 ``main.py`` 的参数保持一致，所以现有前端（以及你自己写的界面）
-可以直接照旧 spawn 这个进程、照旧解析 ``@@PROGRESS 解密 3/10`` 这一行。
+前端可以 spawn 这个进程，解析 ``@@PROGRESS 解密 3/10`` 这一行，
+或者加 ``--json`` 拿结构化事件（TuneFree.app 就是这么接的）。
 
     python main.py -i "~/Music/下载" -o "~/Music/导出" -b 320k
     python main.py -i "~/Music/下载" --json          # 事件流，给新前端用
@@ -52,7 +52,6 @@ class Reporter(object):
                         "percent": round(progress.percent, 1),
                         "file": progress.current_file})
             return
-        # 这个协议 Windows 版前端是认的，保持逐字节一致
         print("@@PROGRESS %s %d/%d" % (progress.phase, progress.done, progress.total), flush=True)
         if self._tty:
             print("%s: %d/%d" % (progress.phase, progress.done, progress.total),
@@ -155,9 +154,6 @@ def cmd_info(paths, reporter):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    # app.py 那种「先起自己、再带 --cli」的调用方式也认，前端可以原样搬过来
-    if argv and argv[0] == "--cli":
-        argv = argv[1:]
     args = build_parser().parse_args(argv)
     _setup_logging()
     reporter = Reporter(json_mode=args.json)

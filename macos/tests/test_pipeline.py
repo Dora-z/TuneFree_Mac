@@ -75,7 +75,7 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(verify.verify_file(mp3)["ok"])
         # 默认不保留 FLAC
         self.assertFalse(os.path.exists(os.path.join(opts.flac_dir, "曲目 A.flac")))
-        # 进度相位与 Windows 版一致
+        # 进度相位
         self.assertEqual({p.phase for p in progress}, {"解密", "转码"})
 
     def test_keep_flac(self):

@@ -14,10 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-# 打包成窗口程序后，Windows 上给子进程加 CREATE_NO_WINDOW，避免黑框闪一下
-_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
-
-_EXE = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+_EXE = "ffmpeg"
 
 _EXTRA_DIRS = [
     "/opt/homebrew/bin",      # Apple Silicon Homebrew
@@ -90,7 +87,6 @@ def _run(cmd, capture_stdout=False):
         text=not capture_stdout,
         encoding=None if capture_stdout else "utf-8",
         errors=None if capture_stdout else "ignore",
-        creationflags=_NO_WINDOW,
         stdin=subprocess.DEVNULL,
     )
 
@@ -209,12 +205,12 @@ def find_ffprobe(ffmpeg_path=None):
     candidates = []
     if ffmpeg_path:
         folder = Path(ffmpeg_path).parent
-        candidates += [folder / ("ffprobe.exe" if os.name == "nt" else "ffprobe")]
+        candidates += [folder / "ffprobe"]
     found = shutil.which("ffprobe")
     if found:
         candidates.append(Path(found))
     for folder in _EXTRA_DIRS:
-        candidates.append(Path(folder) / ("ffprobe.exe" if os.name == "nt" else "ffprobe"))
+        candidates.append(Path(folder) / "ffprobe")
     for path in candidates:
         if path.is_file() and os.access(str(path), os.X_OK):
             return str(path)
@@ -231,7 +227,7 @@ def read_tags(path, ffmpeg_path=None):
             [tool, "-v", "error", "-show_entries", "format_tags", "-of",
              "default=noprint_wrappers=1", str(path)],
             capture_output=True, text=True, encoding="utf-8", errors="ignore",
-            creationflags=_NO_WINDOW, stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
         )
     except OSError:
         return {}
@@ -294,7 +290,7 @@ def probe_audio(path, ffmpeg_dir=None):
     """用 ffprobe（如果能找到）读时长/采样率，给界面显示用。失败返回 None。"""
     tool = None
     if ffmpeg_dir:
-        cand = Path(ffmpeg_dir) / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
+        cand = Path(ffmpeg_dir) / "ffprobe"
         if cand.is_file():
             tool = str(cand)
     if tool is None:
@@ -313,7 +309,7 @@ def probe_audio(path, ffmpeg_dir=None):
              "format=duration,format_name:stream=sample_rate,channels,codec_name",
              "-of", "default=noprint_wrappers=1", str(path)],
             capture_output=True, text=True, encoding="utf-8", errors="ignore",
-            creationflags=_NO_WINDOW, stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
         )
     except OSError:
         return None

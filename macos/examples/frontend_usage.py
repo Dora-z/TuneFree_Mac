@@ -10,7 +10,7 @@
 
 * ``api``：进程内调用，能拿到 Result / FileError 结构，能取消，适合新界面；
 * ``subprocess``：起一个 python 子进程，解析 ``@@PROGRESS 解密 3/10``，
-  和 Windows 版前端一模一样，适合把老界面的后端换掉。
+  适合任何语言写的界面（加 ``--json`` 可拿结构化事件，``--mode json``）。
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def run_inprocess(input_dir, output_dir, bitrate="320k"):
 # ------------------------------------------------------------------ 方式 B ----
 
 def run_via_subprocess(input_dir, output_dir, bitrate="320k"):
-    """子进程调用：解析 @@PROGRESS 协议，和 Windows 版前端完全一样。"""
+    """子进程调用：解析 @@PROGRESS 协议。"""
     cmd = [sys.executable, os.path.join(BACKEND, "main.py"),
            "-i", input_dir, "-o", output_dir, "-b", bitrate]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

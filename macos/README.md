@@ -1,30 +1,16 @@
-# TuneFree macOS 后端
+# TuneFree 后端（tunefree_backend）
 
-把 QQ音乐下载的加密歌曲（`.mflac` / `.mgg`）还原成 `FLAC` / `OGG`，再转成 `MP3`。
-**这是纯后端**：没有界面，只提供命令行和 Python API，前端随便用 Qt / SwiftUI / Tauri / 网页壳子接。
+把 QQ音乐下载的加密歌曲（`.mflac` / `.mgg` 等）还原成 `FLAC` / `OGG`，再转成 `MP3`。
+这里是**后端**：命令行 + Python API。图形界面在 [`app/`](app/README.md)，它通过 `--json` 事件流驱动这个后端。
 
-## 和 Windows 原版最大的区别
+## 原理
 
-原版（`../main.py` + `hook_qq_music.js`）走的是 Frida 注入：把 JS 注入 `QQMusic.exe`，
-借它自己导出的 `EncAndDesMediaFile::Read` 来解密，所以必须有 Windows 版 QQ音乐在运行。
-QQ音乐没有 macOS 版能对得上的注入目标，这条路在 Mac 上走不通。
+**算法在进程内复现**，不注入 QQ音乐、也不需要它在运行：解析文件尾部拿到 ekey，
+用 TC-TEA 派生密钥，再用 QMC2 的 Map / RC4 密码把音频异或回来；老格式 QMC1 用固定异或表。
 
-这里的做法是**把算法搬进进程内**：自己解析文件尾部拿到 ekey，用 TC-TEA 派生密钥，
-再用 QMC2 的 Map / RC4 密码把音频异或回来。结果是：
-
-| | Windows 原版 | 本后端 |
-|---|---|---|
-| QQ音乐客户端 | 必须运行并登录 | **不需要** |
-| Frida 注入 | 必须 | **不需要** |
-| 网络 | 只在检查更新时 | **完全不联网** |
-| 平台 | 仅 Windows | macOS（以及任何 Python 3.9+ 平台） |
-| 速度 | 依赖进程内调用 | 解密约 **400–480 MB/s** |
-| 杀软告警 | 会被当成注入行为 | 无注入行为 |
-
-## 图形界面
-
-`app/` 里是原生 SwiftUI 界面，`bash app/build.sh` 打出自带 Python 和 ffmpeg 的
-`dist/TuneFree.app` 与 DMG，用户双击即用。详见 [app/README.md](app/README.md)。
+- 纯 Python 标准库，零第三方依赖（Python 3.9+）
+- 解密约 **400–480 MB/s**，瓶颈在 ffmpeg 转码
+- 只有 `musicex` 布局的文件需要联网：用本机 QQ音乐登录态向官方接口取这首歌的 ekey（见下文）
 
 ## 快速开始
 
@@ -44,8 +30,6 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 ```
 
 ## 命令行
-
-参数与 Windows 版一致，原有前端可以照旧 spawn 这个进程、照旧解析 `@@PROGRESS`。
 
 | 参数 | 说明 |
 |---|---|
@@ -72,9 +56,9 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 
 ## 前端怎么接
 
-### 方式 A：子进程 + 进度协议（改动最小）
+### 方式 A：子进程 + 进度协议
 
-沿用原版协议，一行一个事件：
+一行一个事件：
 
 ```
 @@PROGRESS 解密 3/10
@@ -89,9 +73,11 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 {"event":"progress","phase":"解密","done":3,"total":10,"percent":30.0,"file":"song.mflac"}
 {"event":"decrypt-ok","input":"/in/a.mflac","output":"/out/flac/a.flac","info":{...}}
 {"event":"transcode-ok","input":"/out/flac/a.flac","output":"/out/mp3/a.mp3"}
-{"event":"decrypt-fail","input":"/in/b.mgg","reason":"ekey","message":"..."}   // 另有 transcode-fail
+{"event":"decrypt-fail","input":"/in/b.mgg","reason":"ekey","message":"..."}
 {"event":"result","result":{"files_found":10,"decrypted":9,"decrypt_failed":1,"mp3_ok":9,...}}
 ```
+
+另有 `decrypt-skip` / `transcode-skip` / `transcode-fail`；`--info --json` 输出 `info` 事件。
 
 ### 方式 B：进程内调用（推荐，能拿到结构化结果 + 可取消）
 
@@ -216,37 +202,20 @@ QQ音乐的缓存文件经常不带标签（`.mgg` 里常常一个标签都没�
 
 不想要就在命令行加 `--no-tags`。
 
-## 发给别人用
+## 打包发布
 
-### 打一个发布包
+推荐发图形界面版：`bash app/build.sh` → `dist/TuneFree.app` + DMG，内置 Python 运行时和 ffmpeg，
+详见 [app/README.md](app/README.md)。
 
-```bash
-bash ship/build_app.sh
-# → dist/TuneFree-<版本>-<架构>.zip   （约 24 MB）
-```
+不要界面的话，`bash ship/build_app.sh` 会打一个命令行版 zip（双击 `TuneFree.command`，
+用系统对话框选目录）。
 
-包里自带 **Python 运行时 + ffmpeg + 双击启动器 + 使用者说明**，对方什么都不用装。
-体积构成：ffmpeg 47 MB（压缩后约一半）+ Python 运行时 8 MB + 程序本体 1.3 MB。
+两种包都需要注意：
 
-### 对方要做的四步
-
-1. 解压 zip
-2. 在 `TuneFree.command` 上**右键 → 打开**（首次一次，之后双击就行。因为包没做签名/公证）
-3. 依次点四个对话框：选输入文件夹（默认已指到 QQ音乐缓存目录）→ 选输出文件夹 →
-   选音质 → 要不要保留无损
-4. 等进度跑完，自动弹出输出文件夹，里面的 `mp3/` 就是成品
-
-对方**不需要**：Python、pip、ffmpeg、Homebrew、终端命令。
-对方**需要**：QQ音乐在这台 Mac 上登录过（`musicex` 文件的密钥按账号现取，见上一节）。
-
-### 三个必须提前知道的点
-
-1. **架构**：在 arm64 Mac 上打出来的包只给 arm64 用（Intel 机器跑 `bash ship/build_app.sh`
-   或用 `ARCH=x86_64` 配 x86_64 的 Python 重打一次）。架构不对时启动器会直接说人话，不会哑掉。
-2. **签名**：没有开发者证书，所以首次打开会被 Gatekeeper 拦一次，右键 → 打开即可；
-   启动器自己会清掉解压带来的隔离标记。
-3. **账号绑定**：别人转发给你的 `musicex` 文件（新版客户端下载的）解不开，因为密钥绑的是
-   下载它的那个账号 —— 只有 `QTag` / `V1` 布局的老文件能跨账号。
+1. **架构**：在 Apple 芯片上打的包只给 arm64 用；Intel 版要在 Intel Mac 上重打。
+2. **签名**：没有开发者证书时是 ad-hoc 签名，首次打开要右键 → 打开。
+3. **账号绑定**：`musicex` 文件的密钥绑定下载它的那个账号，别人转发的这类文件解不开；
+   `QTag` / `V1` / QMC1 的文件不受影响。
 
 ## 实测（真实文件）
 
@@ -265,30 +234,12 @@ FLAC 那条是最硬的证据：STREAMINFO 里存着整段 PCM 的 MD5，解完�
 解密走 `int` 大整数异或 + 预计算掩码表，实测 40 MB 文件 **0.08 s（约 480 MB/s）**，
 CPU 占用单核。瓶颈在 ffmpeg 转码，用 `-j 4` 可以并行。
 
-## 复用上游界面（`TuneFree.py`）要改的三处
+## 注意事项
 
-如果你打算把上游那套 PySide6 界面搬到 Mac，只需要动后端相关的部分：
-
-1. **后端的路径**：上游 `TuneFree.py` 会找同目录的 `main.exe`，找不到再退回
-   `python main.py`。把 `self.dev_script` 指向本目录的 `main.py` 即可，参数不用改。
-2. **ffmpeg 的存在性检查**：上游检查的是 `ffmpeg.exe`，Mac 上要换成
-   `tunefree_backend.audio.find_ffmpeg()`（Homebrew 路径、PATH、App 内 Resources 都会找）。
-3. **提示文案**：上游有「请确保 QQ音乐客户端正在运行」这类文案，本后端不需要客户端，
-   这类文案可以整段删掉；`@@PROGRESS` 和日志格式不用改。
-
-界面的其余部分（进度条、目录选择、日志框、退出码处理）可以原样保留。
-
-## 与 Windows 版的行为差异
-
-1. **不检查 QQ音乐音质档位**。原版要求「标准 / HQ / SQ」，因为高音质走的是另一条流；
-   离线解密只看文件本身，文件里是什么就解什么，解出来不是音频会明确报错。
-2. **不联网**。没有更新检查、没有任何外部请求。
-3. **不需要 QQ音乐在跑**，所以也不存在「先把 QQ音乐打开再点开始」这一步。
-   例外是 `musicex` 布局的文件：它要读本机登录态去取密钥，需要这台机器上登录过
-   QQ音乐（不用开着）。
-4. 输出目录默认是 `<输入目录>/output`（原版是 `<当前目录>/output`）；显式传 `-o` 时两者一致。
-5. 文件名按原样保留，不做 NFC/NFD 归一化。
-6. `.mmp4` 等 QQ音乐「视频/其他容器」的加密文件不支持（上游也不支持），会被当成不认识的文件跳过。
+- **不检查音质档位**：文件里是什么就解什么，解出来不是音频会明确报错（`bad-output`）。
+- 输出目录默认是 `<输入目录>/output`。
+- 文件名按原样保留，不做 NFC/NFD 归一化；不同子目录里的同名歌曲会自动加序号。
+- `.mmp4` 等视频/其他容器的加密文件不支持，会被当成不认识的文件跳过。
 
 ## 首次运行可能遇到的系统提示
 
@@ -301,7 +252,7 @@ CPU 占用单核。瓶颈在 ffmpeg 转码，用 `-j 4` 可以并行。
 
 ```
 macos/
-├── main.py                      命令行入口（参数与 Windows 版一致）
+├── main.py                      命令行入口
 ├── tunefree_backend/
 │   ├── tea.py                   TC-TEA（腾讯版 TEA）
 │   ├── qmc2.py                  ekey 派生 + Map/RC4 密码 + 尾部识别
@@ -312,9 +263,11 @@ macos/
 │   ├── job.py                   扫描 → 解密 → 转码的编排，进度/取消/并发
 │   ├── verify.py                OGG/FLAC/MP3 容器校验
 │   └── selftest.py              向量 + 端到端自检
+├── app/                         SwiftUI 图形界面 + 打包脚本
+├── ship/                        命令行版发布包（TuneFree.command）
 ├── tools/make_samples.py        造调试样本（真音频 + 真加密）
 ├── examples/frontend_usage.py   前端接入示例
-└── tests/                       42 个单元 / 集成测试
+└── tests/                       单元 / 集成测试
 ```
 
 跑测试：
@@ -325,5 +278,4 @@ python3 -m unittest discover -s tests -v
 
 ## 许可
 
-与仓库根目录一致，MIT。同样遵守根目录 `README.md` 里的免责声明：
-只处理本机已合法下载的文件，供自己在自有设备上播放。
+MIT，见仓库根目录 `LICENSE`。只处理本机已合法下载的文件，供自己在自有设备上播放。

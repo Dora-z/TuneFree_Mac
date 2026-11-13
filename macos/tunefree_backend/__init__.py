@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 """TuneFree macOS 后端：把 QQ音乐下载的 .mflac / .mgg 解成本地可播放的音频。
 
-与 Windows 原版最大的不同：**完全不依赖 QQ音乐客户端和 Frida**。
-原版通过注入 QQ音乐进程、借它自己的解密函数来还原音频；这里直接在进程内
-用纯 Python 复现 QMCv1 / QMCv2 的算法（ekey → TC-TEA → Map/RC4），
-所以 macOS（以及任何 Python 3.9+ 平台）都能跑，且不需要 QQ音乐在运行。
+**完全不依赖 QQ音乐客户端和进程注入**：直接在进程内用纯 Python 复现
+QMCv1 / QMCv2 的算法（ekey → TC-TEA → Map/RC4），不需要 QQ音乐在运行。
 
 典型调用：
 

@@ -10,7 +10,7 @@ import tempfile
 
 from . import qmc1, qmc2
 
-# 单文件上限，和 Windows 版保持一致
+# 单文件上限
 MAX_FILE_SIZE = 512 * 1024 * 1024
 
 # QMCv2（腾讯新版，带 ekey）
@@ -193,6 +193,14 @@ def decrypt_file(src, dst, ekey=None, overwrite=True, auto_ekey=True, authst=Non
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, dst)
+        # mkstemp 建的是 0600，落到用户目录里会变成「只有本人能读」；
+        # 按常规文件权限改回来（尊重 umask），否则拷到手机/别的账户会读不到
+        try:
+            mask = os.umask(0)
+            os.umask(mask)
+            os.chmod(dst, 0o666 & ~mask)
+        except OSError:
+            pass
     except OSError as exc:
         try:
             os.unlink(tmp)

@@ -11,7 +11,7 @@
     job.cancel()                # 想中断时从别的线程调
 
 进度回调参数是 ``Progress(phase, done, total, current_file)``，
-phase 取值 ``"解密"`` / ``"转码"``，和 Windows 版命令行输出的 ``@@PROGRESS`` 一一对应。
+phase 取值 ``"解密"`` / ``"转码"``，与命令行输出的 ``@@PROGRESS`` 一一对应。
 """
 from __future__ import annotations
 

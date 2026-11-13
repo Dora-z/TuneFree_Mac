@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """QMCv2（.mflac / .mgg）：尾部元数据里的 ekey → TC-TEA 派生密钥 → Map/RC4 解密。
 
-这是 macOS 后端和 Windows 原版的根本区别：原版靠 Frida 注入 QQ音乐进程，
-借它自己的 ``EncAndDesMediaFile::Read`` 解密；这里全部在本地算完，
-不需要 QQ音乐客户端、不需要 Frida、不需要联网。
+全部在本地算完：不需要 QQ音乐客户端、不需要注入进程；
+只有 musicex 布局需要联网向官方接口取这首歌的 ekey。
 
 三种尾部布局（都以文件末尾为基准）：
 
