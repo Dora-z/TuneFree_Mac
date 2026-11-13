@@ -53,13 +53,15 @@ The app bundles its own Python runtime and ffmpeg — **nothing else to install*
 
 ## Features
 
+- 🖼 **Cover wall**: as soon as a folder is opened, every song's album cover is looked up by its ID and laid out in the window (first time online, cached afterwards); conversion progress is drawn right on the covers
 - 🎵 Batch processing, walks subfolders
 - 🎚 MP3 only / MP3 + lossless FLAC / lossless only; MP3 at 128k, 192k or 320k
 - 🏷 **Complete tags**: looks the song up on QQ Music by its ID — title, all artists, album, year, track number, genre, label — and embeds the **800×800 album cover** and **lyrics** (optional `.lrc` file for synced lyrics). A result is only used if title, artist and duration match the file (when it was found by the song ID stored in the file and the length matches, a renamed artist, an alias or a typo in the file's tags doesn't block it); otherwise the file's own tags and the `Artist-Title` file name are used
 - ✅ Optional container checks (OGG page CRC, FLAC STREAMINFO, MP3 frame headers)
-- ⚡ Skips songs already converted; parallel encoding, using half the CPU cores by default (adjustable under Advanced)
+- ⚡ Skips songs already converted; parallel encoding, using half the CPU cores by default (adjustable under Options in the sidebar)
 - 📋 Live per-track status, failure reasons with suggestions, full log
-- 🌗 Light and dark mode follow the system (or pick one in Settings ⌘,)
+- ⚙️ Settings page (gear at the top right, or ⌘,): version, repository link, update check, appearance, completion alert, environment status, cover cache
+- 🌗 Light and dark mode follow the system (or pick one in Settings)
 - 🔔 Automatic update check + **one-click update**: "立即更新" downloads the right installer, verifies it against GitHub's SHA-256, replaces the app and relaunches — no trip to System Settings (turn off auto-check in Settings ⌘,, or check manually via the app menu)
 - 📖 First-launch guide with usage notes and disclaimer, available later from the Help menu
 

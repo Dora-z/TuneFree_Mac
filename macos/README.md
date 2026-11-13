@@ -50,7 +50,8 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 | `--lrc` | 另存一份 `.lrc` 同步歌词（与 MP3 同名） |
 | `--verify` | 每个产物做容器校验（OGG 逐页 CRC / FLAC STREAMINFO / MP3 帧头） |
 | `--json` | 事件以 JSON 行输出，给新前端解析 |
-| `--info` | 只探查尾部结构（QTag / V1 / musicex / qmc1），不解密 |
+| `--info` | 只探查尾部结构（QTag / V1 / musicex / qmc1），不解密；只读文件末尾 64 KB，几百首也是零点几秒 |
+| `--covers` | 配合 `--info --json`：再按文件自带歌曲 ID 查歌名 / 歌手 / 专辑 / 封面，每首发一个 `preview` 事件（12 路并发，结果缓存在 `~/Library/Caches/TuneFree/covers`） |
 | `--selftest` | 内置自检 |
 | `-v, --version` | 版本号 |
 
@@ -80,7 +81,8 @@ python3 main.py -i /tmp/tf-samples -o /tmp/tf-samples/_out --verify
 {"event":"result","result":{"files_found":10,"decrypted":9,"decrypt_failed":1,"mp3_ok":9,...}}
 ```
 
-另有 `decrypt-skip` / `transcode-skip` / `transcode-fail`；`--info --json` 输出 `info` 事件。
+另有 `decrypt-skip` / `transcode-skip` / `transcode-fail`；`--info --json` 输出 `info` 事件，加 `--covers` 再输出
+`preview` 事件（`input`、`title`、`artist`、`album`、`year`、`cover` 本地路径）。
 
 ### 方式 B：进程内调用（推荐，能拿到结构化结果 + 可取消）
 

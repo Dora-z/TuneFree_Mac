@@ -292,6 +292,43 @@ class Client(object):
         return None
 
     # ------------------------------------------------------------ 封面 ----
+    def preview(self, song_id, song_mid=""):
+        """载入文件夹时给封面墙用：按文件自带 song_id 查歌名 / 歌手 / 专辑 / 封面。
+
+        不查歌词，结果按 song_id 缓存在本机，同一个文件夹第二次打开不再联网。
+        返回 dict（含本地封面路径）或 None。
+        """
+        try:
+            song_id = int(song_id or 0)
+        except (TypeError, ValueError):
+            return None
+        if song_id <= 0 or self._disabled:
+            return None
+        cache = os.path.join(self.cache_dir, "songs", "%d.json" % song_id)
+        row = None
+        try:
+            with open(cache, "r", encoding="utf-8") as fh:
+                row = json.load(fh)
+        except (OSError, ValueError):
+            row = None
+        if row is None:
+            meta = self.fetch(song_id, song_mid, with_lyrics=False)
+            if meta is None:
+                return None
+            row = {"title": meta.title or "", "artist": meta.artist, "album": meta.album or "",
+                   "album_mid": meta.album_mid or "", "year": meta.year, "duration": meta.duration}
+            try:
+                os.makedirs(os.path.dirname(cache), exist_ok=True)
+                tmp = cache + ".part%d" % threading.get_ident()
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    json.dump(row, fh, ensure_ascii=False)
+                os.replace(tmp, cache)
+            except OSError:
+                pass
+        out = dict(row)
+        out["cover"] = self.cover(row.get("album_mid")) or ""
+        return out
+
     def cover(self, album_mid):
         """下载专辑封面（800×800，退而求其次 500），缓存到本机；返回本地路径或 None。"""
         if not album_mid:

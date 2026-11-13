@@ -52,6 +52,17 @@ enum Theme {
     static let glassEdgeTop = adaptive(light: NSColor(white: 1, alpha: 0.9), dark: NSColor(white: 1, alpha: 0.18))
     static let glassEdgeBottom = adaptive(light: NSColor(white: 0, alpha: 0.06), dark: NSColor(white: 1, alpha: 0.08))
 
+    // 封面墙
+    /// 侧栏底色：比背景实一点，不用毛玻璃（虚化封面背景上毛玻璃会发灰）
+    static let panel = adaptive(light: NSColor(white: 1, alpha: 0.78), dark: rgb(0.08, 0.085, 0.115, 0.82))
+    static let panelEdge = adaptive(light: NSColor(white: 0, alpha: 0.07), dark: NSColor(white: 1, alpha: 0.07))
+    /// 分段选择器里选中的那一格
+    static let chipSelected = adaptive(light: NSColor(white: 1, alpha: 1), dark: NSColor(white: 1, alpha: 0.16))
+    static let coverEdge = adaptive(light: NSColor(white: 0, alpha: 0.08), dark: NSColor(white: 1, alpha: 0.1))
+    static let coverShadow = adaptive(light: NSColor(white: 0, alpha: 0.16), dark: NSColor(white: 0, alpha: 0.45))
+    static let stopFill = adaptive(light: rgb(0.32, 0.32, 0.38), dark: NSColor(white: 1, alpha: 0.16))
+    static let ringGradient = AngularGradient(colors: [accent2, accent3, accent2], center: .center)
+
     static let brand = LinearGradient(colors: [accent, accent2, accent3],
                                       startPoint: .leading, endPoint: .trailing)
     static let brandDiagonal = LinearGradient(colors: [accent, accent2, accent3],
@@ -197,5 +208,21 @@ struct SectionLabel: View {
             .font(.system(size: 10.5, weight: .semibold))
             .tracking(1.4)
             .foregroundStyle(Theme.textTertiary)
+    }
+}
+
+/// 细进度条（更新窗口用）
+struct GlowBar: View {
+    let progress: Double
+    var active = true
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.overlay(0.08))
+                Capsule()
+                    .fill(Theme.brand)
+                    .frame(width: max(6, geo.size.width * progress))
+            }
+        }
     }
 }

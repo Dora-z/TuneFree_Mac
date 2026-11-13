@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import traceback
 
 from . import VERSION, Options, audio, decrypt, job as job_mod, run_selftest
@@ -67,9 +68,13 @@ class Reporter(object):
         else:
             logging.info(result.summary())
 
+    _emit_lock = threading.Lock()
+
     def _emit(self, payload):
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        with self._emit_lock:      # 并行转码 / 查封面时多个线程同时发事件，整行写出不交错
+            sys.stdout.write(line)
+            sys.stdout.flush()
 
 
 # ---------------------------------------------------------------- 参数 ----
@@ -102,6 +107,8 @@ def build_parser():
     parser.add_argument("--verify", action="store_true", help="解密/转码后校验音频容器完整性")
     parser.add_argument("--json", action="store_true", help="以 JSON 行输出事件（前端解析用）")
     parser.add_argument("--info", action="store_true", help="只探查文件尾部结构，不解密")
+    parser.add_argument("--covers", action="store_true",
+                        help="配合 --info --json：再按文件自带歌曲 ID 联网查歌名 / 专辑 / 封面（preview 事件）")
     parser.add_argument("--selftest", action="store_true", help="跑内置自检（算法向量 + 端到端）")
     parser.add_argument("-v", "--version", action="version", version="TuneFree %s" % VERSION)
     return parser
@@ -115,7 +122,32 @@ def _setup_logging():
 
 # ---------------------------------------------------------------- 命令 ----
 
-def cmd_info(paths, reporter):
+def cmd_previews(rows, reporter, workers=12):
+    """--info --covers：按 song_id 查封面，每查到一首发一个 preview 事件（并发、带缓存）。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from . import meta as meta_mod
+
+    client = meta_mod.Client()
+    todo = [row for row in rows if row.get("song_id") and "error" not in row]
+    if not todo:
+        return
+
+    def one(row):
+        try:
+            found = client.preview(row.get("song_id"), row.get("mid") or "")
+        except Exception:  # 预览只是锦上添花
+            found = None
+        if found:
+            payload = {"event": "preview", "input": row["path"]}
+            payload.update(found)
+            reporter._emit(payload)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(one, todo))
+
+
+def cmd_info(paths, reporter, covers=False):
     rows = []
     for path in paths:
         try:
@@ -125,6 +157,8 @@ def cmd_info(paths, reporter):
     if reporter.json_mode:
         for row in rows:
             reporter._emit({"event": "info", "info": row})
+        if covers:
+            cmd_previews(rows, reporter)
         return 0
     for row in rows:
         if "error" in row:
@@ -180,7 +214,7 @@ def main(argv=None):
         else:
             reporter.log("error", "路径不存在：%s" % input_dir)
             return 1
-        return cmd_info(paths, reporter)
+        return cmd_info(paths, reporter, covers=args.covers)
 
     if not os.path.isdir(input_dir):
         reporter.log("error", "输入目录不存在：%s" % input_dir)

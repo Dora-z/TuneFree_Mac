@@ -64,7 +64,9 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run   # �
 | `-appearanceMode light` / `dark` | 命令行参数：这次运行固定浅色 / 深色（截图对比两种外观用） |
 | `TUNEFREE_DEBUG_ONBOARDING=1` | 强制弹出首次使用说明（调试运行时默认不弹） |
 | `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.9.0`） |
-| `TUNEFREE_DEBUG_SNAPSHOT=<目录>` | 每秒把窗口截成 PNG，共 `TUNEFREE_DEBUG_SHOTS` 张后退出 |
+| `TUNEFREE_DEBUG_SNAPSHOT=<目录>` | 每秒把窗口截成 PNG，共 `TUNEFREE_DEBUG_SHOTS` 张后退出；`TUNEFREE_DEBUG_SHOT_TIMES=5,12,40` 指定在第几秒截 |
+| `TUNEFREE_DEBUG_SNAPSHOT_OFFSCREEN=1` | 截图只在进程内渲染（`cacheDisplay`），一定不会触发「屏幕录制」授权；有弹出页时截弹出页 |
+| `TUNEFREE_DEBUG_SHEET=settings` | 启动后打开某个弹出页（`settings` / `update` / `about` / `onboarding`） |
 
 ## 结构
 
@@ -79,7 +81,11 @@ app/
     ├── Model/Backend.swift     找后端、起进程、逐行解析 JSON 事件
     ├── Model/AppModel.swift    状态机：选目录 → 探查 → 运行 → 结果
     ├── Model/Track.swift       曲目与状态
-    └── Views/                  界面（极光背景、曲目列表、设置面板、进度条、结果卡片、日志）
+    └── Views/
+        ├── CoverWall.swift     封面墙、封面状态、虚化封面背景、浮动滚动条
+        ├── Sidebar.swift       右侧：导出设置卡片 + 进度 / 结果卡片
+        ├── SettingsView.swift  设置页（⌘,）：版本、仓库、检查更新、外观、运行环境、缓存
+        └── …                   顶栏、首页、更新窗口、首次说明、日志
 ```
 
 ## 检查更新与首次说明

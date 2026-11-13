@@ -7,8 +7,13 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            AuroraBackground(energy: model.phase == .running ? 1 : 0)
-                .animation(.easeInOut(duration: 1.2), value: model.phase == .running)
+            if model.phase == .idle {
+                AuroraBackground(energy: 0)
+                    .transition(.opacity)
+            } else {
+                CoverBackdrop()
+                    .transition(.opacity)
+            }
 
             VStack(spacing: 0) {
                 TopBar()
@@ -26,8 +31,8 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if model.phase != .idle {
-                        InspectorView()
-                            .frame(width: 300)
+                        WallSidebar()
+                            .frame(width: 290)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
@@ -60,6 +65,7 @@ struct ContentView: View {
                 case .onboarding: OnboardingView(firstRun: true)
                 case .about: OnboardingView(firstRun: false)
                 case .update: UpdateView()
+                case .settings: SettingsSheet()
                 }
             }
             .environment(model)
@@ -78,40 +84,18 @@ struct ContentView: View {
             EmptyStateView(isTargeted: dropTargeted)
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
         } else {
-            ZStack(alignment: .bottom) {
-                LibraryView()
-                    .padding(.top, 8)
-                    .glass(radius: 24)
-                    .overlay {
-                        if dropTargeted && !model.isBusy {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .strokeBorder(Theme.brandDiagonal, lineWidth: 2)
-                                .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.accent2.opacity(0.08)))
-                                .overlay(Label("松手换成这个文件夹", systemImage: "arrow.down.circle.fill")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Theme.textPrimary))
-                        }
+            CoverWallView()
+                .overlay {
+                    if dropTargeted && !model.isBusy {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Theme.accent2, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.accent2.opacity(0.08)))
+                            .overlay(Label("松手换成这个文件夹", systemImage: "arrow.down.circle.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary))
                     }
-
-                // 进度条常驻、用透明度切换：if/else 里带 transition 的写法在任务很快结束时
-                // 会卡在过渡中途（进度条不消失、结果卡片不出现）
-                let running = model.phase == .running
-                ProgressDock()
-                    .opacity(running ? 1 : 0)
-                    .offset(y: running ? 0 : 24)
-                    .allowsHitTesting(running)
-                    .accessibilityHidden(!running)
-                    .padding(14)
-                    .animation(.spring(response: 0.45, dampingFraction: 0.9), value: running)
-
-                if model.phase == .finished {
-                    SummaryView()
-                        .padding(14)
-                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
-                                                removal: .opacity))
                 }
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .transition(.opacity)
         }
     }
 }
@@ -159,12 +143,22 @@ struct TopBar: View {
 
             Spacer()
 
+            Button { model.sheet = .settings } label: {
             HStack(spacing: 8) {
-                StatusPill(ok: true, label: "离线解密")
-                StatusPill(ok: model.hasFFmpeg, label: model.hasFFmpeg ? "转码引擎就绪" : "缺少 ffmpeg")
-                StatusPill(ok: model.hasQQLogin, label: model.hasQQLogin ? "已检测到 QQ音乐登录态" : "未检测到 QQ音乐登录态")
-                    .help("新版 QQ音乐下载的 musicex 文件需要本机登录态来取密钥；QTag/V1 格式不需要")
+                if model.hasFFmpeg && model.hasQQLogin {
+                    StatusPill(ok: true, label: "一切就绪")
+                        .help("离线解密 · 转码引擎就绪 · 已检测到 QQ音乐登录态")
+                } else {
+                    if !model.hasFFmpeg { StatusPill(ok: false, label: "缺少 ffmpeg") }
+                    if !model.hasQQLogin {
+                        StatusPill(ok: false, label: "未检测到 QQ音乐登录态")
+                            .help("新版 QQ音乐下载的 musicex 文件需要本机登录态来取密钥；QTag/V1 格式不需要")
+                    }
+                }
             }
+            .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Button {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { model.showLog.toggle() }
@@ -174,6 +168,12 @@ struct TopBar: View {
             .buttonStyle(IconButtonStyle(active: model.showLog))
             .help("运行日志（⌘L）")
             .keyboardShortcut("l", modifiers: .command)
+
+            Button { model.sheet = .settings } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(IconButtonStyle(active: model.sheet == .settings))
+            .help("设置（⌘,）")
         }
         .padding(.horizontal, 16)
     }

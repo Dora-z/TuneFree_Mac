@@ -25,6 +25,8 @@ QMC2_EXTS = {
 }
 
 # QMCv1（固定异或表）
+PROBE_TAIL = 64 * 1024
+
 QMC1_EXTS = {
     ".qmcflac": "flac",
     ".qmcogg": "ogg",
@@ -83,15 +85,21 @@ def probe(path):
         "ekey": None,
     }
     if ext not in QMC1_EXTS:
+        # 尾部结构都在最后几百字节里（V1 的 key 最多 1 KB），只读末尾一段，
+        # 几百首几 GB 的文件夹载入时不用把整份音频读一遍
         try:
             with open(path, "rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                total = fh.tell()
+                skip = max(0, total - PROBE_TAIL)
+                fh.seek(skip)
                 data = fh.read()
         except OSError as exc:
             raise DecryptError("读不了这个文件：%s" % exc, "io")
         footer = qmc2.detect_footer(data)
+        footer.audio_len += skip
         info["kind"] = footer.kind
         info["song_id"] = footer.song_id
-        info["mid"] = footer.mid
         info["mid"] = footer.mid
         info["filename"] = footer.filename
         info["audio_bytes"] = footer.audio_len

@@ -70,6 +70,7 @@ enum SheetKind: String, Identifiable {
     case onboarding   // 首次打开：使用说明 + 免责声明（必须同意）
     case about        // 从菜单再次查看说明
     case update       // 检查更新结果
+    case settings     // 设置（版本、仓库、检查更新、外观等）
     var id: String { rawValue }
 }
 
@@ -120,6 +121,8 @@ final class AppModel {
     var fillTags: Bool { didSet { save() } }
     var force: Bool { didSet { save() } }
     var onlineTags: Bool { didSet { save() } }
+    /// 转换完成时播放提示音、在程序坞跳一下
+    var finishSound: Bool { didSet { defaults.set(finishSound, forKey: "finishSound") } }
     var appearance: AppearanceMode {
         didSet {
             UserDefaults.standard.set(appearance.rawValue, forKey: "appearanceMode")
@@ -172,6 +175,8 @@ final class AppModel {
     let bundled: Bool
 
     private var process: BackendProcess?
+    /// 载入文件夹时的探查 + 查封面（查封面可能要十几秒，和转换互不影响）
+    private var previewProcess: BackendProcess?
     private let defaults = UserDefaults.standard
 
     static let qqCacheURL = FileManager.default.homeDirectoryForCurrentUser
@@ -276,6 +281,7 @@ final class AppModel {
         fillTags = d.object(forKey: "fillTags") as? Bool ?? true
         force = d.object(forKey: "force") as? Bool ?? false
         onlineTags = d.object(forKey: "onlineTags") as? Bool ?? true
+        finishSound = d.object(forKey: "finishSound") as? Bool ?? true
         appearance = AppearanceMode(rawValue: d.string(forKey: "appearanceMode") ?? "") ?? .system
         writeLrc = d.object(forKey: "writeLrc") as? Bool ?? false
         if let p = d.string(forKey: "outputPath") {
@@ -366,6 +372,8 @@ final class AppModel {
 
     func reset() {
         guard !isBusy else { return }
+        previewProcess?.terminate()
+        previewProcess = nil
         inputURL = nil
         tracks = []
         summary = nil
@@ -412,12 +420,29 @@ final class AppModel {
     private func probe(_ url: URL) {
         var index: [String: Int] = [:]
         for (i, t) in tracks.enumerated() { index[t.path] = i }
+        var probed = 0
+        previewProcess?.terminate()
         do {
-            process = try BackendProcess(
-                args: ["--info", "--json", "-i", url.path],
+            previewProcess = try BackendProcess(
+                args: ["--info", "--json", "-i", url.path] + (onlineTags ? ["--covers"] : []),
                 onEvent: { [weak self] ev in
-                    guard let self, self.inputURL == url,
-                          ev["event"] as? String == "info",
+                    guard let self, self.inputURL == url else { return }
+                    if ev["event"] as? String == "preview" {
+                        // 封面墙：载入时按文件自带歌曲 ID 查到的歌名 / 专辑 / 封面
+                        guard let path = ev["input"] as? String, let i = index[path],
+                              self.tracks[i].status == .pending else { return }
+                        func str(_ key: String) -> String? {
+                            let v = ev[key] as? String ?? ""
+                            return v.isEmpty ? nil : v
+                        }
+                        self.tracks[i].metaTitle = str("title") ?? self.tracks[i].metaTitle
+                        self.tracks[i].metaArtist = str("artist") ?? self.tracks[i].metaArtist
+                        self.tracks[i].album = str("album") ?? self.tracks[i].album
+                        self.tracks[i].year = str("year") ?? self.tracks[i].year
+                        self.tracks[i].coverPath = str("cover") ?? self.tracks[i].coverPath
+                        return
+                    }
+                    guard ev["event"] as? String == "info",
                           let info = ev["info"] as? [String: Any],
                           let path = info["path"] as? String,
                           let i = index[path] else { return }
@@ -426,10 +451,13 @@ final class AppModel {
                     if let auto = info["ekey_auto"] as? [String: Any] {
                         self.tracks[i].needsLogin = !(auto["available"] as? Bool ?? false)
                     }
+                    // 结构探查完就能开始转换，不等封面
+                    probed += 1
+                    if probed >= self.tracks.count, self.phase == .scanning { self.phase = .ready }
                 },
                 onExit: { [weak self] _ in
                     guard let self, self.inputURL == url else { return }
-                    self.process = nil
+                    self.previewProcess = nil
                     if self.phase == .scanning { self.phase = .ready }
                 })
         } catch {
@@ -446,11 +474,7 @@ final class AppModel {
             tracks[i].status = .pending
             tracks[i].decryptedPath = nil
             tracks[i].outputPath = nil
-            tracks[i].metaTitle = nil
-            tracks[i].metaArtist = nil
-            tracks[i].album = nil
-            tracks[i].year = nil
-            tracks[i].coverPath = nil
+            // 歌名 / 专辑 / 封面保留载入时查到的，转码阶段的 tags 事件再按最终结果覆盖
             tracks[i].onlineTagged = false
         }
         summary = nil
@@ -495,7 +519,10 @@ final class AppModel {
         process?.cancel()
     }
 
-    func terminateIfRunning() { process?.terminate() }
+    func terminateIfRunning() {
+        process?.terminate()
+        previewProcess?.terminate()
+    }
 
     private func appendLog(_ level: String, _ message: String) {
         logs.append(LogLine(level: level, message: message))
@@ -566,11 +593,11 @@ final class AppModel {
                     let v = ev[key] as? String ?? ""
                     return v.isEmpty ? nil : v
                 }
-                tracks[i].metaTitle = str("title")
-                tracks[i].metaArtist = str("artist")
-                tracks[i].album = str("album")
-                tracks[i].year = str("year")
-                tracks[i].coverPath = str("cover")
+                tracks[i].metaTitle = str("title") ?? tracks[i].metaTitle
+                tracks[i].metaArtist = str("artist") ?? tracks[i].metaArtist
+                tracks[i].album = str("album") ?? tracks[i].album
+                tracks[i].year = str("year") ?? tracks[i].year
+                tracks[i].coverPath = str("cover") ?? tracks[i].coverPath
                 tracks[i].onlineTagged = ev["online"] as? Bool ?? false
             }
         case "transcode-fail":
@@ -639,7 +666,7 @@ final class AppModel {
         cancelling = false
         phase = .finished   // 动画由 ContentView 的 .animation(value: phase) 负责
 
-        if !wasCancelled {
+        if !wasCancelled && finishSound {
             NSApp.requestUserAttention(.informationalRequest)
             NSSound(named: "Glass")?.play()
         }

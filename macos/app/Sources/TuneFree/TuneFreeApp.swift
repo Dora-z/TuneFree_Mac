@@ -42,8 +42,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///   TUNEFREE_DEBUG_VERSION=<版本>     假装当前是这个版本（测检查更新）
 ///   TUNEFREE_DEBUG_SNAPSHOT=<目录>    每秒截一张窗口图，共 TUNEFREE_DEBUG_SHOTS 张（默认 8）
 enum DebugHooks {
+    static let snapshotting = ProcessInfo.processInfo.environment["TUNEFREE_DEBUG_SNAPSHOT"] != nil
+
     static func install(_ model: AppModel) {
         let env = ProcessInfo.processInfo.environment
+        if let sheet = env["TUNEFREE_DEBUG_SHEET"].flatMap(SheetKind.init(rawValue:)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { model.sheet = sheet }
+        }
         if env["TUNEFREE_DEBUG_SHOWLOG"] == "1" {
             model.showLog = true
         }
@@ -71,11 +76,22 @@ enum DebugHooks {
                            seconds: Double(env["TUNEFREE_DEBUG_RECORD_SECONDS"] ?? "") ?? 20)
         }
         if let out = env["TUNEFREE_DEBUG_SNAPSHOT"] {
+            // TUNEFREE_DEBUG_SHOT_TIMES="5,12,40"：在这些秒数各截一张（默认每秒一张，共 SHOTS 张）
             let shots = Int(env["TUNEFREE_DEBUG_SHOTS"] ?? "") ?? 8
-            for i in 0..<shots {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 + Double(i)) {
-                    snapshot(to: URL(fileURLWithPath: out).appendingPathComponent(String(format: "shot-%02d.png", i)))
-                    if i == shots - 1 { NSApp.terminate(nil) }
+            let times = env["TUNEFREE_DEBUG_SHOT_TIMES"]
+                .map { $0.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) } }
+                ?? (0..<shots).map { 1.0 + Double($0) }
+            let offscreen = env["TUNEFREE_DEBUG_SNAPSHOT_OFFSCREEN"] == "1"
+            for (i, t) in times.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                    let url = URL(fileURLWithPath: out).appendingPathComponent(String(format: "shot-%02d.png", i))
+                    if offscreen { offscreenSnapshot(to: url) } else { snapshot(to: url) }
+                    if i == times.count - 1 {
+                        // 有 sheet 开着时 terminate 会被挡住，调试截图结束就直接退出
+                        NSApp.windows.forEach { w in w.attachedSheet.map { w.endSheet($0) } }
+                        NSApp.terminate(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exit(0) }
+                    }
                 }
             }
         }
@@ -88,6 +104,16 @@ enum DebugHooks {
         guard let h = dlopen(nil, RTLD_NOW), let sym = dlsym(h, "CGWindowListCreateImage") else { return nil }
         let fn = unsafeBitCast(sym, to: Fn.self)
         return fn(.null, 8, UInt32(window.windowNumber), 1)?.takeRetainedValue()
+    }
+
+    /// 只在本进程里把窗口内容画成图，不经过窗口服务器，一定不会触发「屏幕录制」授权
+    static func offscreenSnapshot(to url: URL) {
+        guard let main = NSApp.windows.first(where: { $0.isVisible && $0.sheetParent == nil }) else { return }
+        let window = main.attachedSheet ?? main     // 有弹出的设置页 / 说明页时截它
+        guard let view = window.contentView?.superview ?? window.contentView,
+              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 
     /// 走窗口服务器截自己的窗口（能截到动画的真实帧）；拿不到时退回 cacheDisplay
@@ -141,6 +167,10 @@ struct TuneFreeApp: App {
             CommandGroup(after: .appInfo) {
                 Button("检查更新…") { checkForUpdates() }
             }
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") { model.sheet = .settings }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
             CommandGroup(replacing: .help) {
                 Button("使用说明与免责声明") { model.sheet = .about }
                 Button("TuneFree 主页") { NSWorkspace.shared.open(URL(string: "https://github.com/\(Updater.repo)")!) }
@@ -162,12 +192,6 @@ struct TuneFreeApp: App {
                 Button("在 Finder 中显示导出目录") { model.revealOutput() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
-        }
-
-        Settings {
-            SettingsView()
-                .environment(model)
-                .environment(updater)
         }
     }
 
