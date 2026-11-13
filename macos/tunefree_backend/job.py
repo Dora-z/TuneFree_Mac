@@ -284,6 +284,8 @@ class Job(object):
                     if not check.get("ok"):
                         result.errors.append(FileError(src, "verify", "bad-container",
                                                        str(check.get("detail"))))
+                if info.get("trimmed_bytes"):
+                    note += "，去掉末尾 %d 字节非音频数据" % info["trimmed_bytes"]
                 self.log("解密成功：%s → %s%s" % (name, os.path.basename(dst), note))
                 self.on_file({"event": "decrypt-ok", "input": src, "output": dst, "info": info})
 

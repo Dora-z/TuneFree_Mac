@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from . import qmc1, qmc2
+from . import qmc1, qmc2, trim
 
 # 单文件上限
 MAX_FILE_SIZE = 512 * 1024 * 1024
@@ -174,6 +174,12 @@ def decrypt_bytes(path, ekey=None, auto_ekey=True, authst=None, uin=None):
         raise DecryptError(
             "解密结果的头部不是音频（%r），密钥可能不对或文件已损坏" % plain[:4], "bad-output"
         )
+    # 部分 QQ音乐文件在音频和尾部之间夹着几十字节非音频数据，解密后会接在音频末尾；
+    # 能确认最后一帧 / 最后一页完整结束的位置时，把多余的裁掉
+    end = trim.audio_end(plain, sniffed)
+    if end is not None and 0 < end < len(plain):
+        info["trimmed_bytes"] = len(plain) - end
+        plain = plain[:end]
     return plain, info
 
 
