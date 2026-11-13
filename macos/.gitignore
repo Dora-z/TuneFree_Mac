@@ -1,0 +1,6 @@
+samples/
+*.part
+.build/
+dist/
+
+.DS_Store

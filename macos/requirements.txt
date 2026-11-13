@@ -1,0 +1,8 @@
+# 运行时零第三方依赖：QMC1 / QMC2 / TC-TEA 全部用标准库实现。
+# 只要 Python 3.9+。
+#
+# 转码依赖系统里的 ffmpeg（brew install ffmpeg），或者让 pip 兜底带一份静态版：
+# imageio-ffmpeg>=0.4
+#
+# 测试只用标准库 unittest：
+# python3 -m unittest discover -s tests -v
