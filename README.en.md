@@ -96,7 +96,7 @@ CLI usage, the `--json` event protocol and the Python API are documented in [mac
 
 ## How it works
 
-No process injection: the algorithms are reimplemented locally. The file footer yields the ekey → TC-TEA derives the key → QMC2's Map / RC4 cipher restores the audio; legacy QMC1 uses a fixed XOR table. Decryption runs at ~400–480 MB/s, then ffmpeg encodes.
+No process injection: the algorithms are reimplemented locally. The file footer yields the ekey → TC-TEA derives the key → QMC2's Map / RC4 cipher restores the audio; legacy QMC1 uses a fixed XOR table. Decryption runs at 600+ MB/s for both the Map and RC4 ciphers (well under 0.1 s per song); almost all the time goes to the ffmpeg encode.
 
 ## Disclaimer
 
@@ -106,7 +106,8 @@ For **personal study and use** only: decrypt music you legally downloaded, to pl
 
 [MIT License](LICENSE). The license covers the code; it does not change the usage limits above.
 
-- Based on [zksbx/TuneFree](https://github.com/zksbx/TuneFree) (the Windows version)
+- Based on [zksbx/TuneFree](https://github.com/zksbx/TuneFree) (the Windows version).
+  Since 3.0.0 this project uses its own version numbers (earlier `2.1.3-mac.N` releases followed the original repo's numbering)
 - [FFmpeg](https://ffmpeg.org/) — audio encoding
 - [Unlock Music](https://github.com/unlock-music/unlock-music) — format research
 - [PyInstaller](https://pyinstaller.org/) — bundling the Python runtime

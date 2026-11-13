@@ -146,7 +146,7 @@ python3 main.py --selftest
 
 ## 原理
 
-不注入 QQ音乐进程，算法在本地复现：解析文件尾部拿到 ekey → TC-TEA 派生密钥 → QMC2 的 Map / RC4 密码把音频还原；老格式 QMC1 用固定异或表。解密约 400–480 MB/s，再交给 ffmpeg 转码。
+不注入 QQ音乐进程，算法在本地复现：解析文件尾部拿到 ekey → TC-TEA 派生密钥 → QMC2 的 Map / RC4 密码把音频还原；老格式 QMC1 用固定异或表。解密在 600 MB/s 以上（Map / RC4 两种都是），一首歌不到 0.1 秒，时间主要花在 ffmpeg 转码。
 
 ## 项目结构
 
@@ -174,7 +174,8 @@ TuneFree_Mac/
 
 代码以 [MIT License](LICENSE) 开源。MIT 授权的是代码，不改变上面免责声明对使用场景的限制。
 
-- 基于 [zksbx/TuneFree](https://github.com/zksbx/TuneFree)（Windows 版，作者 曾困睡不醒）
+- 基于 [zksbx/TuneFree](https://github.com/zksbx/TuneFree)（Windows 版，作者 曾困睡不醒）。
+  从 3.0.0 起使用本项目自己的版本号（之前的 `2.1.3-mac.N` 沿用了原仓库的版本号）
 - [FFmpeg](https://ffmpeg.org/) — 音频转码
 - [Unlock Music](https://github.com/unlock-music/unlock-music) — 加密格式的解析经验
 - [PyInstaller](https://pyinstaller.org/) — 打包 Python 运行时

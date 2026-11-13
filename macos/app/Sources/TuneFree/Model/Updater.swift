@@ -4,8 +4,8 @@ import Observation
 
 /// GitHub Releases 上的一个版本
 struct ReleaseInfo: Equatable {
-    let tag: String           // v2.1.3-mac.5
-    let version: String       // 2.1.3-mac.5
+    let tag: String           // v3.0.0
+    let version: String       // 3.0.0
     let title: String
     let notes: String
     let pageURL: URL
@@ -66,7 +66,7 @@ final class Updater {
         currentVersion == "0-dev" ? "开发版" : currentVersion
     }
 
-    /// 把 2.1.3-mac.5 拆成 [2, 1, 3, 5] 逐段比较
+    /// 把 3.0.1 拆成 [3, 0, 1]（旧版的 2.1.3-mac.12 是 [2, 1, 3, 12]）逐段比较
     static func numbers(_ version: String) -> [Int] {
         var out: [Int] = []
         var current = ""

@@ -63,7 +63,7 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run   # �
 | `TUNEFREE_DEBUG_AUTOUPDATE=1` | 发现新版本就直接走一键更新（配合 `TUNEFREE_DEBUG_VERSION` 做端到端测试，建议在 App 的副本上跑） |
 | `-appearanceMode light` / `dark` | 命令行参数：这次运行固定浅色 / 深色（截图对比两种外观用） |
 | `TUNEFREE_DEBUG_ONBOARDING=1` | 强制弹出首次使用说明（调试运行时默认不弹） |
-| `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.1.3-mac.1`） |
+| `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.9.0`） |
 | `TUNEFREE_DEBUG_SNAPSHOT=<目录>` | 每秒把窗口截成 PNG，共 `TUNEFREE_DEBUG_SHOTS` 张后退出 |
 
 ## 结构
@@ -86,7 +86,7 @@ app/
 
 - **检查更新**（`Model/Updater.swift`）：启动 3 秒后自动查一次、之后每 24 小时一次（设置 ⌘, 里可关，默认开）；
   菜单「TuneFree → 检查更新…」手动查。先问 GitHub API 拿版本和更新说明，API 不通时退回
-  `releases/latest` 的跳转拿 tag。版本号按数字逐段比较（`2.1.3-mac.5` → 2,1,3,5），
+  `releases/latest` 的跳转拿 tag。版本号按数字逐段比较（`3.0.1` → 3,0,1；旧的 `2.1.3-mac.12` → 2,1,3,12，所以 3.0.0 一定比所有旧版新），
   「立即更新」（`Model/UpdateInstaller.swift`）由 App 自己下载对应芯片的 DMG（`TuneFree-<版本>-arm64|x86_64.dmg`，
   发布时要保持这个命名）→ 用 GitHub API 返回的资产 `digest`（SHA-256）校验 → 挂载并拷出 App，检查签名
   （`codesign --strict`）、包名、版本、架构 → `replaceItemAt` 替换当前 App → 等自己退出后 `open` 新版本。

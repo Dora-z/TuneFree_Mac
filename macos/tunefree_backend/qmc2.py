@@ -198,72 +198,63 @@ class Rc4Cipher(object):
             box[i], box[j] = box[j], box[i]
         self._box = box
         self._hash = _hash_base(self.key)
+        # 每个分段都从同一个初始 S 盒、j=k=0 开始，只是先丢弃 discard 个字节，
+        # 所以所有分段的密钥流都是同一条「基础流」的切片。discard 最大
+        # 0x1FF + (RC4_SEGMENT-1)，再取一个分段长度，一次算好就够全文件用。
+        self._base = self._stream(0x1FF + RC4_SEGMENT)
+        self._head = self._first_keystream()
+
+    def _stream(self, length):
+        n = self.size
+        box = bytearray(self._box)
+        out = bytearray(length)
+        j = 0
+        k = 0
+        for x in range(length):
+            j = (j + 1) % n
+            k = (box[j] + k) % n
+            box[j], box[k] = box[k], box[j]
+            out[x] = box[(box[j] + box[k]) % n]
+        return bytes(out)
 
     def _segment_key(self, seg_id, seed):
         if not seed:
             return 0
         return int(self._hash / ((seg_id + 1) * seed) * 100.0)
 
-    @staticmethod
-    def _next(n, box, j, k):
-        j = (j + 1) % n
-        k = (box[j] + k) % n
-        box[j], box[k] = box[k], box[j]
-        return box[(box[j] + box[k]) % n], j, k
-
-    def _first_segment(self, out, begin, length, offset):
+    def _first_keystream(self):
+        """前 RC4_FIRST 字节：每个字节单独从 key 里取掩码。"""
         n = self.size
         key = self.key
-        for x in range(length):
-            o = offset + x
-            k1 = key[o % n]
-            out[begin + x] ^= key[self._segment_key(o, k1) % n]
+        return bytes(key[self._segment_key(o, key[o % n]) % n] for o in range(RC4_FIRST))
 
-    def _other_segment(self, out, begin, length, offset):
-        n = self.size
-        seg_id = offset // RC4_SEGMENT
-        discard = (self._segment_key(seg_id, self.key[seg_id & 0x1FF]) & 0x1FF) + (offset % RC4_SEGMENT)
-        box = bytearray(self._box)
-        j = 0
-        k = 0
-        for _ in range(discard):
-            _, j, k = self._next(n, box, j, k)
-        for x in range(length):
-            value, j, k = self._next(n, box, j, k)
-            out[begin + x] ^= value
+    def keystream(self, length, offset=0):
+        """从 offset 开始、长度 length 的掩码流（全部是切片拼接，没有逐字节循环）。"""
+        parts = []
+        cur = offset
+        end = offset + length
+        if cur < RC4_FIRST and cur < end:
+            stop = min(end, RC4_FIRST)
+            parts.append(self._head[cur:stop])
+            cur = stop
+        base = self._base
+        key = self.key
+        while cur < end:
+            seg_id = cur // RC4_SEGMENT
+            phase = cur % RC4_SEGMENT
+            take = min(end - cur, RC4_SEGMENT - phase)
+            discard = (self._segment_key(seg_id, key[seg_id & 0x1FF]) & 0x1FF) + phase
+            parts.append(base[discard:discard + take])
+            cur += take
+        return b"".join(parts)
 
     def decrypt(self, data, offset=0):
-        out = bytearray(data)
-        n = len(out)
-        pos = 0
-        left = n
-        cur = offset
-
-        if cur < RC4_FIRST:
-            step = min(left, RC4_FIRST - cur)
-            self._first_segment(out, pos, step, cur)
-            pos += step
-            left -= step
-            cur += step
-
-        # 对齐到分段边界
-        align = cur % RC4_SEGMENT
-        if align:
-            step = min(left, RC4_SEGMENT - align)
-            self._other_segment(out, pos, step, cur)
-            pos += step
-            left -= step
-            cur += step
-
-        while left > RC4_SEGMENT:
-            self._other_segment(out, pos, RC4_SEGMENT, cur)
-            pos += RC4_SEGMENT
-            left -= RC4_SEGMENT
-            cur += RC4_SEGMENT
-
-        if left > 0:
-            self._other_segment(out, pos, left, cur)
-        return bytes(out)
+        data = bytes(data)
+        n = len(data)
+        if not n:
+            return b""
+        ks = self.keystream(n, offset)
+        return (int.from_bytes(data, "big") ^ int.from_bytes(ks, "big")).to_bytes(n, "big")
 
 
 def make_cipher(key):

@@ -96,6 +96,32 @@ class Qmc2Rc4Test(unittest.TestCase):
         payload = bytes((i * 13 + 7) & 0xFF for i in range(200000))
         self.assertEqual(cipher.decrypt(cipher.decrypt(payload)), payload)
 
+    def test_切片密钥流等于逐字节参考实现(self):
+        # 快速实现把各分段的密钥流从一条基础流里切出来；这里逐字节按参考算法重算一遍对照
+        key = bytes(((i * 131 + 17) ^ (i >> 3)) & 0xFF for i in range(704))
+        cipher = qmc2.Rc4Cipher(key)
+        n = len(key)
+
+        def reference(offset, length):
+            out = bytearray()
+            for o in range(offset, offset + length):
+                if o < qmc2.RC4_FIRST:
+                    out.append(key[cipher._segment_key(o, key[o % n]) % n])
+                    continue
+                seg = o // qmc2.RC4_SEGMENT
+                skip = (cipher._segment_key(seg, key[seg & 0x1FF]) & 0x1FF) + o % qmc2.RC4_SEGMENT
+                box = bytearray(cipher._box)
+                j = k = 0
+                for _ in range(skip + 1):
+                    j = (j + 1) % n
+                    k = (box[j] + k) % n
+                    box[j], box[k] = box[k], box[j]
+                out.append(box[(box[j] + box[k]) % n])
+            return bytes(out)
+
+        for offset, length in [(0, 200), (120, 20), (5110, 20), (0x1400 * 37 + 5, 30)]:
+            self.assertEqual(cipher.keystream(length, offset), reference(offset, length), (offset, length))
+
     def test_按长度选密码(self):
         self.assertIsInstance(qmc2.make_cipher(b"\x00" * 300), qmc2.MapCipher)
         self.assertIsInstance(qmc2.make_cipher(b"\x00" * 301), qmc2.Rc4Cipher)
