@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///   TUNEFREE_DEBUG_OPEN=<目录>        启动后自动载入
 ///   TUNEFREE_DEBUG_OUTPUT=<目录>      本次运行的导出目录（不写入偏好设置）
 ///   TUNEFREE_DEBUG_AUTORUN=1          载入完成后自动开始
+///   TUNEFREE_DEBUG_ONBOARDING=1       强制弹出首次说明
+///   TUNEFREE_DEBUG_VERSION=<版本>     假装当前是这个版本（测检查更新）
 ///   TUNEFREE_DEBUG_SNAPSHOT=<目录>    每秒截一张窗口图，共 TUNEFREE_DEBUG_SHOTS 张（默认 8）
 enum DebugHooks {
     static func install(_ model: AppModel) {
@@ -72,8 +74,15 @@ enum DebugHooks {
         typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         if let h = dlopen(nil, RTLD_NOW), let sym = dlsym(h, "CGWindowListCreateImage") {
             let fn = unsafeBitCast(sym, to: Fn.self)
+            // 有弹出的 sheet 时：以 sheet 为顶，连同下面的主窗口一起截（主窗口范围内）
+            var image: CGImage?
+            if let sheet = window.attachedSheet, let screen = NSScreen.screens.first {
+                let f = window.frame
+                let rect = CGRect(x: f.minX, y: screen.frame.maxY - f.maxY, width: f.width, height: f.height)
+                image = fn(rect, 2 | 8, UInt32(sheet.windowNumber), 1)?.takeRetainedValue()
+            }
             // .null rect = 窗口自身边界；optionIncludingWindow = 8；boundsIgnoreFraming = 1
-            if let img = fn(.null, 8, UInt32(window.windowNumber), 1)?.takeRetainedValue() {
+            if let img = image ?? fn(.null, 8, UInt32(window.windowNumber), 1)?.takeRetainedValue() {
                 let rep = NSBitmapImageRep(cgImage: img)
                 try? rep.representation(using: .png, properties: [:])?.write(to: url)
                 return
@@ -90,18 +99,31 @@ enum DebugHooks {
 struct TuneFreeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
+    @State private var updater = Updater()
 
     var body: some Scene {
         WindowGroup("TuneFree") {
             ContentView()
                 .environment(model)
-                .onAppear { delegate.attach(model) }
+                .environment(updater)
+                .onAppear {
+                    delegate.attach(model)
+                    startup()
+                }
                 .background(WindowConfigurator())
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1180, height: 760)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("检查更新…") { checkForUpdates() }
+            }
+            CommandGroup(replacing: .help) {
+                Button("使用说明与免责声明") { model.sheet = .about }
+                Button("TuneFree 主页") { NSWorkspace.shared.open(URL(string: "https://github.com/\(Updater.repo)")!) }
+                Button("所有版本") { NSWorkspace.shared.open(Updater.releasesURL) }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("打开文件夹…") { model.chooseInput() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -118,6 +140,30 @@ struct TuneFreeApp: App {
                 Button("在 Finder 中显示导出目录") { model.revealOutput() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
+        }
+
+        Settings {
+            SettingsView()
+                .environment(model)
+                .environment(updater)
+        }
+    }
+
+    private func checkForUpdates() {
+        model.sheet = .update
+        updater.check(manual: true)
+    }
+
+    /// 启动：首次打开先弹说明；自动检查更新在后台进行，发现新版本再提示
+    private func startup() {
+        let env = ProcessInfo.processInfo.environment
+        let debugRun = env.keys.contains { $0.hasPrefix("TUNEFREE_DEBUG_") }
+        if env["TUNEFREE_DEBUG_ONBOARDING"] == "1" || (!debugRun && model.needsOnboarding) {
+            model.sheet = .onboarding
+        }
+        updater.onFound = { [model] _ in model.presentUpdateIfQuiet() }
+        if !debugRun || env["TUNEFREE_DEBUG_VERSION"] != nil {
+            updater.start()
         }
     }
 }

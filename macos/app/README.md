@@ -54,6 +54,8 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run   # �
 | `TUNEFREE_DEBUG_OPEN=<目录>` | 启动后自动载入这个文件夹 |
 | `TUNEFREE_DEBUG_OUTPUT=<目录>` | 本次的导出目录（不写入偏好设置） |
 | `TUNEFREE_DEBUG_AUTORUN=1` | 载入完成后自动开始 |
+| `TUNEFREE_DEBUG_ONBOARDING=1` | 强制弹出首次使用说明（调试运行时默认不弹） |
+| `TUNEFREE_DEBUG_VERSION=<版本>` | 假装当前是这个版本，用来测检查更新（如 `2.1.3-mac.1`） |
 | `TUNEFREE_DEBUG_SNAPSHOT=<目录>` | 每秒把窗口截成 PNG，共 `TUNEFREE_DEBUG_SHOTS` 张后退出 |
 
 ## 结构
@@ -71,6 +73,16 @@ app/
     ├── Model/Track.swift       曲目与状态
     └── Views/                  界面（极光背景、曲目列表、设置面板、进度条、结果卡片、日志）
 ```
+
+## 检查更新与首次说明
+
+- **检查更新**（`Model/Updater.swift`）：启动 3 秒后自动查一次、之后每 24 小时一次（设置 ⌘, 里可关，默认开）；
+  菜单「TuneFree → 检查更新…」手动查。先问 GitHub API 拿版本和更新说明，API 不通时退回
+  `releases/latest` 的跳转拿 tag。版本号按数字逐段比较（`2.1.3-mac.5` → 2,1,3,5），
+  「下载新版本」直接打开对应芯片的 DMG（`TuneFree-<版本>-arm64|x86_64.dmg`），所以发布时要保持这个命名。
+  转换进行中不弹窗，只在顶栏显示「新版本」提示。
+- **首次说明**（`Views/OnboardingView.swift`）：首次打开弹出使用说明 + 免责声明，勾选同意才能继续；
+  免责声明有改动时把 `disclaimerVersion` 加一，所有人会再看到一次。之后可从「帮助」菜单再次查看。
 
 ## 用到的后端事件
 

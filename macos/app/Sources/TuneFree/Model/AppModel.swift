@@ -37,6 +37,13 @@ enum Phase: Equatable {
     case finished
 }
 
+enum SheetKind: String, Identifiable {
+    case onboarding   // 首次打开：使用说明 + 免责声明（必须同意）
+    case about        // 从菜单再次查看说明
+    case update       // 检查更新结果
+    var id: String { rawValue }
+}
+
 struct LogLine: Identifiable {
     let id = UUID()
     let date = Date()
@@ -91,6 +98,32 @@ final class AppModel {
     var showLog = false
     var cancelling = false
     var lastError: String?
+
+    // 弹窗
+    var sheet: SheetKind?
+    /// 别的弹窗开着时发现了新版本：等它关掉再弹
+    private var pendingUpdateSheet = false
+
+    var needsOnboarding: Bool {
+        UserDefaults.standard.integer(forKey: "disclaimerAcceptedVersion") < OnboardingView.disclaimerVersion
+    }
+
+    func dismissSheet() {
+        sheet = nil
+        if pendingUpdateSheet {
+            pendingUpdateSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                guard let self, self.sheet == nil, self.phase != .running else { return }
+                self.sheet = .update
+            }
+        }
+    }
+
+    /// 自动检查发现新版本：转换中不打扰（顶栏有提示），有弹窗开着就排队
+    func presentUpdateIfQuiet() {
+        guard phase != .running else { return }
+        if sheet == nil { sheet = .update } else if sheet != .update { pendingUpdateSheet = true }
+    }
 
     // 环境
     let hasFFmpeg: Bool

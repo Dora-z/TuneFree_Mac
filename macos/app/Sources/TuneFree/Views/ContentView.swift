@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(Updater.self) private var updater
     @State private var dropTargeted = false
 
     var body: some View {
@@ -46,6 +47,17 @@ struct ContentView: View {
             model.handleDrop(urls)   // 动画由 .animation(value: phase) 负责
         } isTargeted: { dropTargeted = $0 }
         .animation(.spring(response: 0.55, dampingFraction: 0.88), value: model.phase)
+        .sheet(item: Binding(get: { model.sheet }, set: { if $0 == nil { model.dismissSheet() } else { model.sheet = $0 } })) { kind in
+            Group {
+                switch kind {
+                case .onboarding: OnboardingView(firstRun: true)
+                case .about: OnboardingView(firstRun: false)
+                case .update: UpdateView()
+                }
+            }
+            .environment(model)
+            .environment(updater)
+        }
         .alert("出错了", isPresented: .init(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("好") { model.lastError = nil }
         } message: {
@@ -99,6 +111,7 @@ struct ContentView: View {
 
 struct TopBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(Updater.self) private var updater
 
     var body: some View {
         HStack(spacing: 12) {
@@ -116,6 +129,25 @@ struct TopBar: View {
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+            }
+
+            if let release = updater.badge {
+                Button { model.sheet = .update } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.down.circle.fill")
+                        Text("新版本 \(release.version)")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Theme.brandDiagonal))
+                    .shadow(color: Theme.accent2.opacity(0.5), radius: 8)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("有新版本可以下载")
+                .transition(.scale.combined(with: .opacity))
             }
 
             Spacer()
