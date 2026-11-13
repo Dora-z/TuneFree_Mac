@@ -88,6 +88,7 @@ struct LibraryView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+            .fixedSize()                 // 窗口窄的时候让文件夹名去截断，统计数字不换行
             .glass(radius: 16)
 
             Button { model.chooseInput() } label: {
@@ -108,6 +109,7 @@ struct LibraryView: View {
             Text(value)
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .lineLimit(1)
                 .foregroundStyle(Theme.textPrimary)
                 .contentTransition(.numericText())
             Text(label).font(.system(size: 10.5)).foregroundStyle(Theme.textTertiary)

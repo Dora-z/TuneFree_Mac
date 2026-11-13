@@ -121,6 +121,9 @@ struct InspectorView: View {
                 .padding(20)
             }
             .scrollIndicators(.never)
+            // 新版 macOS 允许滚动内容延伸到工具栏底下；不裁的话往下滚时，
+            // 「导出到」等内容会画到卡片外面、压在顶栏的状态提示上
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24, style: .continuous))
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
 

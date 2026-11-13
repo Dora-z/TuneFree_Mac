@@ -219,22 +219,37 @@ build_arch() {
     || { echo "$SELFTEST" | tail -20; echo "✗ 包内自检失败"; exit 1; }
   echo "$SELFTEST" | tail -3
 
-  # 6) DMG
+  # 6) DMG：带背景图、固定图标位置的安装窗口（dmgbuild 直接写 .DS_Store，不需要操控 Finder）
   if [ "$MAKE_DMG" = 1 ]; then
     local DMG="$DIST/TuneFree-$VERSION-$ARCH.dmg"
     echo "==> 制作 $DMG"
-    local STAGE="$BUILD/dmg-$ARCH"
-    rm -rf "$STAGE" "$DMG"
-    mkdir -p "$STAGE"
-    ditto "$APP" "$STAGE/TuneFree.app"
-    ln -s /Applications "$STAGE/Applications"
-    cp "$HERE/Support/使用说明.txt" "$STAGE/使用说明.txt"
-    hdiutil create -quiet -volname "TuneFree" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$DMG"
-    rm -rf "$STAGE"
+    rm -f "$DMG"
+    "$TOOLS_VENV/bin/dmgbuild" -s "$HERE/Support/dmg_settings.py" \
+      -D app="$APP" -D background="$DMG_BG" -D volicon="$ICONWORK/AppIcon.icns" \
+      "TuneFree" "$DMG" >/dev/null
   fi
 }
 
+# ---------------------------------------------------------- DMG 素材 ----
+TOOLS_VENV="$BUILD/venv-tools"
+DMG_BG="$BUILD/dmg-background/background.tiff"
+prepare_dmg() {
+  [ "$MAKE_DMG" = 1 ] || return 0
+  echo "==> DMG 背景与 dmgbuild"
+  if [ ! -x "$TOOLS_VENV/bin/dmgbuild" ]; then
+    /usr/bin/python3 -m venv "$TOOLS_VENV"
+    "$TOOLS_VENV/bin/python" -m pip install -q --upgrade pip
+    "$TOOLS_VENV/bin/python" -m pip install -q dmgbuild
+  fi
+  local dir; dir="$(dirname "$DMG_BG")"
+  rm -rf "$dir" && mkdir -p "$dir"
+  swift "$HERE/Support/make_dmg_background.swift" "$dir" "$ICONWORK/icon_1024.png" >/dev/null
+  # 1x + 2x 合成一张多分辨率 TIFF，Retina 屏上背景才清晰
+  tiffutil -cathidpicheck "$dir/background.png" "$dir/background@2x.png" -out "$DMG_BG" 2>/dev/null
+}
+
 make_icon
+prepare_dmg
 for a in "${ARCHS[@]}"; do build_arch "$a"; done
 
 echo
