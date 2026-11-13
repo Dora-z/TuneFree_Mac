@@ -204,7 +204,7 @@ struct CoverTile: View {
             .overlay(alignment: .bottomTrailing) { badge.padding(7) }
             .shadow(color: Theme.coverShadow, radius: hover ? 14 : 8, y: hover ? 8 : 4)
             .scaleEffect(hover ? 1.025 : 1)
-            .saturation(dimmed ? 0.15 : 1)
+            .saturation(dimmed ? 0 : 1)
             .opacity(dimmed ? 0.55 : 1)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -237,9 +237,9 @@ struct CoverTile: View {
         .animation(.easeOut(duration: 0.35), value: track.coverPath)
     }
 
-    /// 转换进行中，还没轮到的歌淡一点，正在做和做完的更显眼
+    /// 未处理的封面保持灰色；解密成功即恢复彩色，等待转码时也不再变灰。
     private var dimmed: Bool {
-        model.phase == .running && (track.status == .pending || track.status == .decrypted)
+        track.status == .pending
     }
 
     private var subtitle: String {
@@ -299,6 +299,9 @@ struct CoverTile: View {
     @ViewBuilder
     private var badge: some View {
         switch track.status {
+        case .decrypted:
+            StatusDot(symbol: "checkmark", color: Theme.success)
+                .help(model.outputMode == .lossless ? "解密完成" : "解密完成，等待转码")
         case .done:
             StatusDot(symbol: "checkmark", color: Theme.success)
         case .skipped:
