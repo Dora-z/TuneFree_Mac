@@ -93,11 +93,38 @@ class CredentialsTest(unittest.TestCase):
 
     def test_找不到凭据时报错清楚(self):
         with mock.patch.object(ekey, "read_credentials_from_plist", return_value=None), \
+             mock.patch.object(ekey, "_read_live_prefs", return_value=None), \
              mock.patch.object(ekey, "_scan_files_for_authst", return_value=None), \
              mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(ekey.EkeyError) as ctx:
                 ekey.get_credentials()
         self.assertIn("--authst", str(ctx.exception))
+
+    def test_沙盒版容器里的偏好设置也能读(self):
+        root = tempfile.mkdtemp()
+        normal = os.path.join(root, "Preferences", "com.tencent.QQMusicMac.plist")      # 不存在
+        sandboxed = make_prefs(authst="Q_H_L_" + "y" * 35, uin=42)
+        with mock.patch.object(ekey, "prefs_candidates", return_value=[normal, sandboxed]), \
+             mock.patch.dict(os.environ, {}, clear=True):
+            creds = ekey.get_credentials()
+        self.assertEqual(creds.uin, "42")
+
+    def test_报错里列出查过的位置和原因(self):
+        root = tempfile.mkdtemp()
+        no_login = os.path.join(root, "com.tencent.QQMusicMac.plist")
+        with open(no_login, "wb") as fh:
+            plistlib.dump({"SomethingElse": 1}, fh)
+        missing = os.path.join(root, "nope.plist")
+        with mock.patch.object(ekey, "prefs_candidates", return_value=[missing, no_login]), \
+             mock.patch.object(ekey, "_read_live_prefs", return_value=None), \
+             mock.patch.object(ekey, "_scan_files_for_authst", return_value=None), \
+             mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ekey.EkeyError) as ctx:
+                ekey.get_credentials()
+        message = str(ctx.exception)
+        self.assertIn("nope.plist：不存在", message)
+        self.assertIn("没有自动登录信息", message)
+        self.assertIn("自动登录", message)
 
 
 class RequestTest(unittest.TestCase):

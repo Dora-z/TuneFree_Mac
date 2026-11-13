@@ -136,6 +136,20 @@ final class AppModel {
     static let qqCacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Containers/com.tencent.QQMusicMac/Data/Library/Application Support/QQMusicMac/iQmc")
 
+    /// QQ音乐有没有保存自动登录信息：普通版在 ~/Library/Preferences，
+    /// 沙盒版（Mac App Store）在自己的容器里。只看有没有 AutoLoginUserInfo，不读内容。
+    static func qqLoginDetected() -> Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let paths = [
+            "Library/Preferences/com.tencent.QQMusicMac.plist",
+            "Library/Containers/com.tencent.QQMusicMac/Data/Library/Preferences/com.tencent.QQMusicMac.plist",
+        ].map { home.appendingPathComponent($0) }
+        for url in paths {
+            if let dict = NSDictionary(contentsOf: url), dict["AutoLoginUserInfo"] != nil { return true }
+        }
+        return false
+    }
+
     var qqCacheExists: Bool { FileManager.default.fileExists(atPath: Self.qqCacheURL.path) }
 
     init() {
@@ -155,8 +169,7 @@ final class AppModel {
                 .appendingPathComponent("Music/TuneFree")
         }
         hasFFmpeg = BackendLocator.ffmpegPath() != nil
-        hasQQLogin = FileManager.default.fileExists(atPath: FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Preferences/com.tencent.QQMusicMac.plist").path)
+        hasQQLogin = AppModel.qqLoginDetected()
         bundled = BackendLocator.isBundled
     }
 

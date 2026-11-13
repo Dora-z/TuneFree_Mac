@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import glob
 import plistlib
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -25,11 +27,12 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 PLATFORM = "20"          # 20 = macOS 客户端，27 = Windows PC
 REFERER = "https://y.qq.com/"
 
-PREFS_PATH = os.path.expanduser("~/Library/Preferences/com.tencent.QQMusicMac.plist")
-CONTAINER = os.path.expanduser(
-    "~/Library/Containers/com.tencent.QQMusicMac/Data"
-    "/Library/Application Support/QQMusicMac"
-)
+DOMAIN = "com.tencent.QQMusicMac"
+PREFS_PATH = os.path.expanduser("~/Library/Preferences/%s.plist" % DOMAIN)
+CONTAINER_ROOT = os.path.expanduser("~/Library/Containers/%s/Data" % DOMAIN)
+# 沙盒版（Mac App Store 装的）QQ音乐，偏好设置在自己的容器里，而不是 ~/Library/Preferences
+CONTAINER_PREFS = os.path.join(CONTAINER_ROOT, "Library", "Preferences", "%s.plist" % DOMAIN)
+CONTAINER = os.path.join(CONTAINER_ROOT, "Library", "Application Support", "QQMusicMac")
 
 _CACHE = {}
 
@@ -88,26 +91,37 @@ def _walk_dicts(node):
                 yield item
 
 
-def read_credentials_from_plist(path=PREFS_PATH):
-    """从 QQ音乐偏好设置里读出 uin / authst。"""
-    if not os.path.isfile(path):
-        return None
+def _short(path):
+    home = os.path.expanduser("~")
+    return "~" + path[len(home):] if path.startswith(home) else path
 
-    try:
-        with open(path, "rb") as fh:
-            prefs = plistlib.load(fh)
-    except Exception:
-        return None
 
+def prefs_candidates():
+    """QQ音乐可能放偏好设置的位置：普通版、沙盒版容器、其他渠道的 domain 名。"""
+    paths = [PREFS_PATH, CONTAINER_PREFS]
+    patterns = (
+        os.path.join(CONTAINER_ROOT, "Library", "Preferences", "*.plist"),
+        os.path.expanduser("~/Library/Preferences/com.tencent.QQMusic*.plist"),
+        os.path.expanduser("~/Library/Containers/com.tencent.QQMusic*/Data/Library/Preferences/*.plist"),
+        os.path.expanduser("~/Library/Group Containers/*QQMusic*/Library/Preferences/*.plist"),
+    )
+    for pattern in patterns:
+        for path in sorted(glob.glob(pattern)):
+            if path not in paths and "tencent" in path.lower():
+                paths.append(path)
+    return paths
+
+
+def _creds_from_prefs(prefs, source):
+    """从偏好设置字典里取凭据，返回 (Credentials 或 None, 状态说明)。"""
     blob = prefs.get("AutoLoginUserInfo")
     if not blob:
-        return None
-
+        return None, "没有自动登录信息（没登录，或没勾选「自动登录」）"
     try:
         archive = plistlib.loads(bytes(blob))
         root = _resolve_objects(archive)
     except Exception:
-        return None
+        return None, "自动登录信息格式不认识（QQ音乐版本可能变了）"
 
     candidates = []
     for node in _walk_dicts(root):
@@ -118,9 +132,53 @@ def read_credentials_from_plist(path=PREFS_PATH):
         candidates.append((str(uin), authst))
 
     if not candidates:
-        return None
+        return None, "有自动登录信息，但里面没有登录凭据（authst）"
     uin, authst = candidates[0]
-    return Credentials(uin, authst, source=os.path.basename(path))
+    return Credentials(uin, authst, source=source), "找到了"
+
+
+def read_credentials_from_plist(path=PREFS_PATH, report=None):
+    """从 QQ音乐偏好设置文件里读出 uin / authst；report 是列表时把检查结果追加进去。"""
+    def note(status):
+        if report is not None:
+            report.append((_short(path), status))
+
+    if not os.path.isfile(path):
+        note("不存在")
+        return None
+    try:
+        with open(path, "rb") as fh:
+            prefs = plistlib.load(fh)
+    except PermissionError:
+        note("没有权限读取（系统设置 → 隐私与安全性 → 完全磁盘访问权限 里允许 TuneFree）")
+        return None
+    except Exception:
+        note("读不了")
+        return None
+    creds, status = _creds_from_prefs(prefs, os.path.basename(path))
+    note(status)
+    return creds
+
+
+def _read_live_prefs(report=None):
+    """通过 defaults 读 QQ音乐当前的偏好设置（刚登录、还没写回磁盘时文件里可能没有）。"""
+    try:
+        proc = subprocess.run(["/usr/bin/defaults", "export", DOMAIN, "-"], capture_output=True,
+                              timeout=5, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0 or not proc.stdout:
+        if report is not None:
+            report.append(("defaults %s" % DOMAIN, "没有这个偏好设置域"))
+        return None
+    try:
+        prefs = plistlib.loads(proc.stdout)
+    except Exception:
+        return None
+    creds, status = _creds_from_prefs(prefs, "defaults %s" % DOMAIN)
+    if report is not None:
+        report.append(("defaults %s" % DOMAIN, status))
+    return creds
 
 
 def _scan_files_for_authst():
@@ -178,7 +236,13 @@ def get_credentials(explicit_authst=None, explicit_uin=None):
         return Credentials(os.environ.get("TUNEFREE_QQMUSIC_UIN", ""), env_authst,
                            source="环境变量")
 
-    creds = read_credentials_from_plist()
+    report = []
+    for path in prefs_candidates():
+        creds = read_credentials_from_plist(path, report)
+        if creds:
+            return creds
+
+    creds = _read_live_prefs(report)
     if creds:
         return creds
 
@@ -186,11 +250,21 @@ def get_credentials(explicit_authst=None, explicit_uin=None):
     if creds:
         return creds
 
-    raise EkeyError(
-        "没有找到 QQ音乐的登录凭据。请：\n"
-        "  1) 打开 QQ音乐并保持登录（读的是它的本地登录态，不需要注入）\n"
+    raise EkeyError(missing_credentials_message(report))
+
+
+def missing_credentials_message(report):
+    checked = "\n".join("     · %s：%s" % (where, status) for where, status in report)
+    installed = os.path.isdir(CONTAINER_ROOT) or os.path.isfile(PREFS_PATH)
+    first = ("打开 QQ音乐，登录下载这些歌的那个账号，并勾选「自动登录」；然后退出 QQ音乐再重试"
+             if installed else "这台 Mac 上好像没装过 QQ音乐：musicex 格式的歌只能在下载它的那台 Mac 上解")
+    return (
+        "没有找到 QQ音乐的登录凭据（新版 QQ音乐下载的 musicex 格式，密钥要用登录态去取）。\n"
+        "  查过的位置：\n%s\n"
+        "  请：\n"
+        "  1) %s\n"
         "  2) 或者手动指定：--authst <authst> --uin <uin>\n"
-        "  3) 或者直接给某个文件的 ekey：--ekey <base64>"
+        "  3) 或者直接给某个文件的 ekey：--ekey <base64>" % (checked or "     · （无）", first)
     )
 
 
