@@ -23,7 +23,7 @@ from .decrypt import (OUTPUT_EXT, SUPPORTED_EXTS, DecryptError, decrypt_file,
 from .job import FileError, Job, Options, Progress, Result, normalize_bitrate, run, scan_inputs
 from .selftest import run_selftest
 
-VERSION = "3.2.0"
+VERSION = "3.2.1"
 
 __all__ = [
     "VERSION",

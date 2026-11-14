@@ -116,9 +116,21 @@ struct CoverWallView: View {
                         }
                         .onChange(of: filter) { followedID = nil }
                         .onChange(of: model.stage) { followedID = nil }
-                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.025),
-                                                     .init(color: .black, location: 0.96), .init(color: .clear, location: 1)],
-                                             startPoint: .top, endPoint: .bottom))
+                        // Keep the native scroller outside any SwiftUI mask/hit-test layer.
+                        .overlay(alignment: .top) {
+                            LinearGradient(colors: [Theme.ink, Theme.ink.opacity(0)],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: 12)
+                                .padding(.trailing, 18)
+                                .allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(colors: [Theme.ink.opacity(0), Theme.ink],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: 24)
+                                .padding(.trailing, 18)
+                                .allowsHitTesting(false)
+                        }
                     }
                 }
             }
@@ -527,9 +539,8 @@ struct CoverBackdrop: View {
 
 // MARK: - 滚动条
 
-/// 封面墙的滚动条：强制用 macOS 的「浮动」样式 —— 细、半透明、滚动时才出现，
-/// 鼠标移上去会变粗、可以拖。系统设置里「显示滚动条：始终」或接着鼠标时，
-/// 默认会变成带灰色轨道的老式滚动条，夹在封面和侧栏之间很难看。
+/// 原生浮动滚动条：隐藏贯穿页面的轨道，保留正常鼠标命中宽度。
+/// 探针只监听手动滚动，不参与鼠标命中。
 private struct OverlayScroller: NSViewRepresentable {
     var onManualScroll: () -> Void
     func makeNSView(context: Context) -> ProbeView {
@@ -547,10 +558,12 @@ private struct OverlayScroller: NSViewRepresentable {
         private var scrollObserver: NSObjectProtocol?
         var onManualScroll: (() -> Void)?
 
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             apply()
-            // 用户改系统设置或插拔鼠标时，AppKit 会把样式改回去，再设一次
+            // 输入设备变化后保持无轨道的浮动样式。
             if observer == nil {
                 observer = NotificationCenter.default.addObserver(
                     forName: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil, queue: .main
@@ -573,11 +586,12 @@ private struct OverlayScroller: NSViewRepresentable {
                         forName: NSScrollView.willStartLiveScrollNotification, object: scroll, queue: .main
                     ) { [weak self] _ in self?.onManualScroll?() }
                 }
-                scroll.scrollerStyle = .overlay
+                let style = NSScroller.Style.overlay
+                if scroll.scrollerStyle != style { scroll.scrollerStyle = style }
+                scroll.hasVerticalScroller = true
                 scroll.autohidesScrollers = true
                 scroll.hasHorizontalScroller = false
-                scroll.verticalScroller?.controlSize = .small
-                scroll.scrollerInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 2)
+                scroll.verticalScroller?.controlSize = .regular
             }
         }
 
