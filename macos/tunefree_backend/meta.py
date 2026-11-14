@@ -292,7 +292,7 @@ class Client(object):
         return None
 
     # ------------------------------------------------------------ 封面 ----
-    def preview(self, song_id, song_mid=""):
+    def preview(self, song_id, song_mid="", allow_network=True):
         """载入文件夹时给封面墙用：按文件自带 song_id 查歌名 / 歌手 / 专辑 / 封面。
 
         不查歌词，结果按 song_id 缓存在本机，同一个文件夹第二次打开不再联网。
@@ -311,6 +311,8 @@ class Client(object):
                 row = json.load(fh)
         except (OSError, ValueError):
             row = None
+        if row is None and not allow_network:
+            return None
         if row is None:
             meta = self.fetch(song_id, song_mid, with_lyrics=False)
             if meta is None:
@@ -326,10 +328,10 @@ class Client(object):
             except OSError:
                 pass
         out = dict(row)
-        out["cover"] = self.cover(row.get("album_mid")) or ""
+        out["cover"] = self.cover(row.get("album_mid"), allow_network=allow_network) or ""
         return out
 
-    def cover(self, album_mid):
+    def cover(self, album_mid, allow_network=True):
         """下载专辑封面（800×800，退而求其次 500），缓存到本机；返回本地路径或 None。"""
         if not album_mid:
             return None
@@ -341,6 +343,8 @@ class Client(object):
             with self._lock:
                 self._covers[album_mid] = path
             return path
+        if not allow_network:
+            return None
         data = None
         for size in (800, 500, 300):
             raw = self._open(urllib.request.Request(COVER_URL.format(size=size, mid=album_mid),

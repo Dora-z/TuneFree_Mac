@@ -8,6 +8,7 @@ struct CoverWallView: View {
     @State private var filter: Filter = .all
     @State private var tileFrames: [String: CGRect] = [:]
     @State private var followedID: String?
+    @State private var followsCurrent = true
 
     /// 按列表顺序跟随当前阶段，避免并行完成事件把焦点拉来拉去。
     private var followTarget: String? {
@@ -31,6 +32,18 @@ struct CoverWallView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Button { model.reset() } label: {
+                Label("返回重新选择", systemImage: "chevron.left")
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(model.isBusy ? Theme.textTertiary : Theme.accent2)
+            .disabled(model.isBusy)
+            .help(model.isBusy ? "请等待当前任务结束后再重新选择" : "返回首页，重新选择歌曲或文件夹")
+            .padding(.horizontal, 26)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
+
             header
                 .padding(.horizontal, 26)
                 .padding(.top, 2)
@@ -38,6 +51,20 @@ struct CoverWallView: View {
 
             if model.tracks.isEmpty && model.phase != .scanning {
                 emptyFolder
+            } else if visible.isEmpty && model.phase != .scanning {
+                VStack(spacing: 14) {
+                    Spacer()
+                    Image(systemName: filter == .failed ? "checkmark.circle" : "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundStyle(Theme.textSecondary)
+                    Text(filter == .failed ? "没有失败的歌曲" : "没有符合条件的歌曲")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Button("查看全部") { filter = .all }
+                        .buttonStyle(GhostButtonStyle())
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             } else {
                 GeometryReader { viewport in
                     ScrollViewReader { proxy in
@@ -59,16 +86,19 @@ struct CoverWallView: View {
                             .padding(.horizontal, 26)
                             .padding(.top, 4)
                             .padding(.bottom, 28)
-                            .background(OverlayScroller())
+                            .background(OverlayScroller {
+                                if model.phase == .running { followsCurrent = false }
+                            })
                         }
                         .coordinateSpace(name: "coverViewport")
                         .onPreferenceChange(CoverFramePreference.self) { tileFrames = $0 }
                         .task(id: model.phase) {
                             followedID = nil
+                            followsCurrent = true
                             guard model.phase == .running else { return }
                             // 合并密集的进度事件，每 0.7 秒最多移动一次；结束或离开界面即取消。
                             while !Task.isCancelled {
-                                if let target = followTarget, target != followedID {
+                                if followsCurrent, let target = followTarget, target != followedID {
                                     followedID = target
                                     let frame = tileFrames[target]
                                     let isVisible = frame.map {
@@ -93,6 +123,7 @@ struct CoverWallView: View {
                 }
             }
         }
+        .onChange(of: model.inputURL) { filter = .all; followsCurrent = true }
     }
 
     // MARK: 头部：文件夹名 + 统计 + 筛选
@@ -100,7 +131,7 @@ struct CoverWallView: View {
     private var header: some View {
         HStack(alignment: .lastTextBaseline, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.inputURL?.lastPathComponent ?? "")
+                Text(model.inputTitle)
                     .font(.system(size: 30, weight: .bold))
                     .tracking(-0.6)
                     .foregroundStyle(Theme.textPrimary)
@@ -128,7 +159,20 @@ struct CoverWallView: View {
                 .foregroundStyle(Theme.textSecondary)
             }
             Spacer(minLength: 12)
-            filterBar
+            VStack(alignment: .trailing, spacing: 8) {
+                filterBar
+                if model.phase == .running {
+                    Button {
+                        followsCurrent.toggle()
+                        if followsCurrent { filter = .all; followedID = nil }
+                    } label: {
+                        Label(followsCurrent ? "暂停跟随" : "回到正在处理", systemImage: followsCurrent ? "pause.circle" : "location.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.accent2)
+                }
+            }
         }
     }
 
@@ -169,13 +213,13 @@ struct CoverWallView: View {
             Image(systemName: "square.grid.3x3")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Theme.textTertiary)
-            Text("这个文件夹里没有找到加密歌曲")
+            Text("没有找到支持的加密歌曲")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text("支持 .mflac · .mgg · .qmcflac · .qmcogg 等，会自动查找子文件夹")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.textSecondary)
-            Button("换一个文件夹…") { model.chooseInput() }
+            Button("重新选择文件或文件夹…") { model.chooseInput() }
                 .buttonStyle(GhostButtonStyle())
                 .padding(.top, 6)
             Spacer()
@@ -239,7 +283,7 @@ struct CoverTile: View {
 
     /// 未处理的封面保持灰色；解密成功即恢复彩色，等待转码时也不再变灰。
     private var dimmed: Bool {
-        track.status == .pending
+        model.phase == .running && track.status == .pending
     }
 
     private var subtitle: String {
@@ -487,11 +531,21 @@ struct CoverBackdrop: View {
 /// 鼠标移上去会变粗、可以拖。系统设置里「显示滚动条：始终」或接着鼠标时，
 /// 默认会变成带灰色轨道的老式滚动条，夹在封面和侧栏之间很难看。
 private struct OverlayScroller: NSViewRepresentable {
-    func makeNSView(context: Context) -> ProbeView { ProbeView() }
-    func updateNSView(_ nsView: ProbeView, context: Context) { nsView.apply() }
+    var onManualScroll: () -> Void
+    func makeNSView(context: Context) -> ProbeView {
+        let view = ProbeView()
+        view.onManualScroll = onManualScroll
+        return view
+    }
+    func updateNSView(_ nsView: ProbeView, context: Context) {
+        nsView.onManualScroll = onManualScroll
+        nsView.apply()
+    }
 
     final class ProbeView: NSView {
         private var observer: NSObjectProtocol?
+        private var scrollObserver: NSObjectProtocol?
+        var onManualScroll: (() -> Void)?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -508,11 +562,17 @@ private struct OverlayScroller: NSViewRepresentable {
 
         deinit {
             if let observer { NotificationCenter.default.removeObserver(observer) }
+            if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         }
 
         func apply() {
             DispatchQueue.main.async { [weak self] in
                 guard let scroll = self?.findScrollView() else { return }
+                if self?.scrollObserver == nil {
+                    self?.scrollObserver = NotificationCenter.default.addObserver(
+                        forName: NSScrollView.willStartLiveScrollNotification, object: scroll, queue: .main
+                    ) { [weak self] _ in self?.onManualScroll?() }
+                }
                 scroll.scrollerStyle = .overlay
                 scroll.autohidesScrollers = true
                 scroll.hasHorizontalScroller = false

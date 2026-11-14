@@ -94,13 +94,22 @@ struct RunSummary {
     var errors: [(path: String, stage: String, reason: String, message: String)] = []
 
     var failed: Int { decryptFailed + mp3Failed }
-    var succeeded: Int { decrypted + decryptSkipped }
+    var succeeded: Int { max(0, decrypted + decryptSkipped - mp3Failed) }
 }
 
 @Observable
 final class AppModel {
     // 目录
     var inputURL: URL?
+    var homeCovers: [Track] = []
+    private var pendingHomeCovers: [Track] = []
+    private var homePreviewProcess: BackendProcess?
+    var inputTitle = ""
+    private var loadID = UUID()
+    private var activePaths: Set<String> = []
+    private var runManifest: URL?
+    private var previewManifest: URL?
+    var retrying = false
     var outputURL: URL
 
     // 列表
@@ -336,17 +345,55 @@ final class AppModel {
         return stage == "转码" ? 0.35 + 0.65 * p : 0.35 * p
     }
 
+    /// Homepage decoration only: never changes the selected batch or starts conversion.
+    func loadHomeCoversIfNeeded(refresh: Bool = false) {
+        guard phase == .idle, homePreviewProcess == nil, refresh || homeCovers.isEmpty else { return }
+        pendingHomeCovers = []
+        let root = ProcessInfo.processInfo.environment["TUNEFREE_DEBUG_HOME"]
+            .map { URL(fileURLWithPath: $0) } ?? Self.qqCacheURL
+        guard FileManager.default.isReadableFile(atPath: root.path) else { return }
+        var args = ["--home-covers", "--json", "-i", root.path]
+        if !onlineTags { args.append("--no-online-tags") }
+        do {
+            homePreviewProcess = try BackendProcess(args: args, onEvent: { [weak self] event in
+                guard let self, event["event"] as? String == "home-cover",
+                      let path = event["input"] as? String,
+                      let cover = event["cover"] as? String,
+                      FileManager.default.fileExists(atPath: cover),
+                      self.pendingHomeCovers.count < 3,
+                      !self.pendingHomeCovers.contains(where: { $0.coverPath == cover }),
+                      CoverCache.image(cover, side: 360) != nil else { return }
+                var track = Track(path: path, size: 0)
+                track.metaTitle = event["title"] as? String
+                track.metaArtist = event["artist"] as? String
+                track.coverPath = cover
+                self.pendingHomeCovers.append(track)
+            }, onExit: { [weak self] _ in
+                guard let self else { return }
+                self.homePreviewProcess = nil
+                // Publish a complete, decoded batch; retain current art if probing fails.
+                if self.phase == .idle, !self.pendingHomeCovers.isEmpty {
+                    let oldPaths = Set(self.homeCovers.compactMap(\.coverPath))
+                    let fresh = self.pendingHomeCovers.filter { !oldPaths.contains($0.coverPath ?? "") }
+                    let candidates = fresh + self.pendingHomeCovers.filter { oldPaths.contains($0.coverPath ?? "") }
+                    self.homeCovers = Array(candidates.prefix(3))
+                }
+                self.pendingHomeCovers = []
+            })
+        } catch { homePreviewProcess = nil }
+    }
+
     // MARK: - 目录
 
     func chooseInput() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
         panel.prompt = "选择"
-        panel.message = "选择放着 .mflac / .mgg 的文件夹（会自动包含子文件夹）"
+        panel.message = "选择歌曲文件或文件夹，可多选；文件夹会包含子文件夹"
         if qqCacheExists { panel.directoryURL = Self.qqCacheURL }
-        if panel.runModal() == .OK, let url = panel.url { load(url) }
+        if panel.runModal() == .OK { load(panel.urls) }
     }
 
     func chooseOutput() {
@@ -363,70 +410,98 @@ final class AppModel {
     }
 
     func handleDrop(_ urls: [URL]) -> Bool {
-        guard !isBusy, let url = urls.first else { return false }
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return false }
-        load(isDir.boolValue ? url : url.deletingLastPathComponent())
+        guard !isBusy, !urls.isEmpty else { return false }
+        load(urls)
         return true
     }
 
     func reset() {
         guard !isBusy else { return }
-        previewProcess?.terminate()
-        previewProcess = nil
+        stopPreview()
+        loadID = UUID()
         inputURL = nil
+        inputTitle = ""
         tracks = []
         summary = nil
         phase = .idle
     }
 
-    func load(_ url: URL) {
-        guard !isBusy else { return }
-        inputURL = url
+    func load(_ url: URL) { load([url]) }
+
+    func load(_ urls: [URL]) {
+        guard !isBusy, let first = urls.first else { return }
+        stopPreview()
+        let token = UUID()
+        loadID = token
+        inputURL = first
+        inputTitle = urls.count == 1 ? (first.standardizedFileURL == Self.qqCacheURL.standardizedFileURL ? "QQ音乐下载" : first.lastPathComponent) : "已选 \(urls.count) 个文件或文件夹"
         summary = nil
         lastError = nil
+        retrying = false
         phase = .scanning
         tracks = []
-
-        // 1) 先在本地快速列出文件，界面立刻有东西
         DispatchQueue.global(qos: .userInitiated).async {
-            let found = Self.scan(url)
+            var seen = Set<String>()
+            let found = urls.flatMap(Self.scan).filter { seen.insert($0.path).inserted }
+                .sorted { $0.path < $1.path }
             DispatchQueue.main.async {
-                guard self.inputURL == url else { return }
+                guard self.loadID == token else { return }
                 self.tracks = found
                 if found.isEmpty {
                     self.phase = .ready
-                    return
+                } else {
+                    self.probe()
                 }
-                // 2) 再让后端探查尾部结构，补上格式 / 布局 / 是否需要登录态
-                self.probe(url)
             }
         }
     }
 
     private static func scan(_ root: URL) -> [Track] {
+        let root = root.standardizedFileURL.resolvingSymlinksInPath()
         let fm = FileManager.default
-        guard let e = fm.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
-                                    options: [.skipsHiddenFiles]) else { return [] }
-        var out: [Track] = []
-        for case let url as URL in e {
-            guard Track.supportedExtensions.contains(url.pathExtension.lowercased()) else { continue }
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { $0 } ?? 0
-            out.append(Track(path: url.path, size: Int64(size)))
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: root.path, isDirectory: &isDir) else { return [] }
+        let candidates: [URL]
+        if isDir.boolValue {
+            candidates = (fm.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+                                       options: [.skipsHiddenFiles])?.allObjects as? [URL]) ?? []
+        } else { candidates = [root] }
+        return candidates.compactMap { url in
+            let url = url.resolvingSymlinksInPath()
+            guard Track.supportedExtensions.contains(url.pathExtension.lowercased()),
+                  let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]),
+                  values.isRegularFile == true else { return nil }
+            return Track(path: url.path, size: Int64(values.fileSize ?? 0))
         }
-        return out.sorted { $0.path < $1.path }
     }
 
-    private func probe(_ url: URL) {
+    private func manifest(for paths: [String]) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tunefree-\(UUID().uuidString).json")
+        let data = try JSONSerialization.data(withJSONObject: ["files": paths, "batch_files": tracks.map(\.path)])
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private func stopPreview() {
+        previewProcess?.terminate()
+        previewProcess = nil
+        if let list = previewManifest { try? FileManager.default.removeItem(at: list) }
+        previewManifest = nil
+    }
+
+    private func probe() {
+        let token = loadID
         var index: [String: Int] = [:]
         for (i, t) in tracks.enumerated() { index[t.path] = i }
         var probed = 0
         previewProcess?.terminate()
         do {
+            let list = try manifest(for: tracks.map(\.path))
+            previewManifest = list
             previewProcess = try BackendProcess(
-                args: ["--info", "--json", "-i", url.path] + (onlineTags ? ["--covers"] : []),
+                args: ["--info", "--json", "--input-list", list.path] + (onlineTags ? ["--covers"] : []),
                 onEvent: { [weak self] ev in
-                    guard let self, self.inputURL == url else { return }
+                    guard let self, self.loadID == token else { return }
                     if ev["event"] as? String == "preview" {
                         // 封面墙：载入时按文件自带歌曲 ID 查到的歌名 / 专辑 / 封面
                         guard let path = ev["input"] as? String, let i = index[path],
@@ -456,11 +531,13 @@ final class AppModel {
                     if probed >= self.tracks.count, self.phase == .scanning { self.phase = .ready }
                 },
                 onExit: { [weak self] _ in
-                    guard let self, self.inputURL == url else { return }
+                    try? FileManager.default.removeItem(at: list)
+                    guard let self, self.loadID == token else { return }
                     self.previewProcess = nil
                     if self.phase == .scanning { self.phase = .ready }
                 })
         } catch {
+            stopPreview()
             lastError = error.localizedDescription
             phase = .ready
         }
@@ -468,9 +545,22 @@ final class AppModel {
 
     // MARK: - 运行
 
-    func start() {
-        guard let input = inputURL, !tracks.isEmpty, !isBusy else { return }
-        for i in tracks.indices {
+    func start() { start(onlyFailed: false) }
+    func retryFailed() { start(onlyFailed: true) }
+
+    private func start(onlyFailed: Bool) {
+        guard inputURL != nil, !tracks.isEmpty, !isBusy else { return }
+        let selected = tracks.filter { !onlyFailed || $0.status.isFailure }.map(\.path)
+        guard !selected.isEmpty else { return }
+        let list: URL
+        do { list = try manifest(for: selected) }
+        catch { lastError = "无法创建待处理文件清单：\(error.localizedDescription)"; return }
+        stopPreview()
+        loadID = UUID() // Ignore any queued preview callbacks after conversion starts.
+        runManifest = list
+        retrying = onlyFailed
+        activePaths = Set(selected)
+        for i in tracks.indices where activePaths.contains(tracks[i].path) {
             tracks[i].status = .pending
             tracks[i].decryptedPath = nil
             tracks[i].outputPath = nil
@@ -481,13 +571,13 @@ final class AppModel {
         logs = []
         stage = "解密"
         stageDone = 0
-        stageTotal = tracks.count
+        stageTotal = selected.count
         currentFile = ""
         cancelling = false
         startedAt = Date()
         phase = .running
 
-        var args = ["--json", "-i", input.path, "-o", outputURL.path, "-b", "\(bitrate)k", "-j", "\(jobs)"]
+        var args = ["--json", "--input-list", list.path, "-o", outputURL.path, "-b", "\(bitrate)k", "-j", "\(jobs)"]
         switch outputMode {
         case .mp3: break
         case .both: args.append("--keep-flac")
@@ -495,7 +585,7 @@ final class AppModel {
         }
         if verify { args.append("--verify") }
         if !fillTags { args.append("--no-tags") }
-        if force { args.append("--force") }
+        if force || onlyFailed { args.append("--force") }
         if !onlineTags { args.append("--no-online-tags") }
         if writeLrc { args.append("--lrc") }
 
@@ -508,6 +598,7 @@ final class AppModel {
                 onRawLine: { [weak self] line in self?.appendLog("debug", line) },
                 onExit: { [weak self] code in self?.finish(code: code) })
         } catch {
+            try? FileManager.default.removeItem(at: list)
             lastError = error.localizedDescription
             phase = .ready
         }
@@ -520,8 +611,10 @@ final class AppModel {
     }
 
     func terminateIfRunning() {
+        homePreviewProcess?.terminate()
         process?.terminate()
         previewProcess?.terminate()
+        for url in [runManifest, previewManifest].compactMap({ $0 }) { try? FileManager.default.removeItem(at: url) }
     }
 
     private func appendLog(_ level: String, _ message: String) {
@@ -538,7 +631,7 @@ final class AppModel {
         // 跳过的旧产物：用文件名主干对号
         let stem = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
         return tracks.firstIndex {
-            URL(fileURLWithPath: $0.path).deletingPathExtension().lastPathComponent == stem
+            activePaths.contains($0.path) && URL(fileURLWithPath: $0.path).deletingPathExtension().lastPathComponent == stem
         }
     }
 
@@ -546,8 +639,8 @@ final class AppModel {
         let target: TrackStatus = stage == "转码" ? .transcoding : .decrypting
         let from: TrackStatus = stage == "转码" ? .decrypted : .pending
         // 已在进行中的同阶段条目以外，按「下一个待处理」点亮
-        if tracks.contains(where: { $0.status == target }) { return }
-        if let i = tracks.firstIndex(where: { $0.status == from }) {
+        if tracks.contains(where: { activePaths.contains($0.path) && $0.status == target }) { return }
+        if let i = tracks.firstIndex(where: { activePaths.contains($0.path) && $0.status == from }) {
             tracks[i].status = target
         }
         _ = file
@@ -635,12 +728,14 @@ final class AppModel {
 
     private func finish(code: Int32) {
         process = nil
+        if let list = runManifest { try? FileManager.default.removeItem(at: list) }
+        runManifest = nil
         let wasCancelled = code == 130 || cancelling
 
         // 先在本地算好，再一次性写回：在 withAnimation 里改 phase 会先同步冲刷前面的改动，
         // 偶发导致主界面收不到 phase 的变化（进度条卡住、结果卡片不出现）
         var updated = tracks
-        for i in updated.indices {
+        for i in updated.indices where activePaths.contains(updated[i].path) {
             switch updated[i].status {
             case .decrypting: updated[i].status = .pending
             case .transcoding: updated[i].status = .decrypted
@@ -651,7 +746,7 @@ final class AppModel {
         }
         var s = summary ?? {
             var s = RunSummary()
-            s.found = updated.count
+            s.found = activePaths.count
             s.elapsed = Date().timeIntervalSince(startedAt ?? Date())
             if code != 0 && code != 130 {
                 s.errors.append(("", "backend", "exit", "后端异常退出（退出码 \(code)），详见日志"))

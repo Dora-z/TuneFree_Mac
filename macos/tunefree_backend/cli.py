@@ -16,6 +16,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
 import threading
 import traceback
@@ -85,6 +86,7 @@ def build_parser():
         description="解密 QQ音乐 mflac/mgg 文件并转换为 MP3（macOS 后端，无需 QQ音乐客户端）",
     )
     parser.add_argument("-i", "--input", help="输入目录（包含 .mflac / .mgg 文件），默认为当前目录")
+    parser.add_argument("--input-list", help="JSON 文件清单，只处理 files 中的路径；batch_files 保持同名歌曲命名稳定")
     parser.add_argument("-o", "--output", help="输出根目录（默认：输入目录下的 output），其下自动创建 mp3 与 flac 子目录")
     parser.add_argument("--flac-dir", help="FLAC 输出目录")
     parser.add_argument("--mp3-dir", help="MP3 输出目录")
@@ -107,6 +109,7 @@ def build_parser():
     parser.add_argument("--verify", action="store_true", help="解密/转码后校验音频容器完整性")
     parser.add_argument("--json", action="store_true", help="以 JSON 行输出事件（前端解析用）")
     parser.add_argument("--info", action="store_true", help="只探查文件尾部结构，不解密")
+    parser.add_argument("--home-covers", action="store_true", help="随机预览下载目录封面，不解密或转换")
     parser.add_argument("--covers", action="store_true",
                         help="配合 --info --json：再按文件自带歌曲 ID 联网查歌名 / 专辑 / 封面（preview 事件）")
     parser.add_argument("--selftest", action="store_true", help="跑内置自检（算法向量 + 端到端）")
@@ -145,6 +148,50 @@ def cmd_previews(rows, reporter, workers=12):
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, todo))
+
+
+def cmd_home_covers(root, reporter, allow_network=True):
+    """Bounded reservoir sample; only probe 12 files and show 3 distinct covers."""
+    from . import meta as meta_mod
+    candidates = []
+    seen = 0
+    for folder, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in names:
+            if name.startswith(".") or not decrypt.is_supported(name):
+                continue
+            path = os.path.join(folder, name)
+            if not os.path.isfile(path):
+                continue
+            seen += 1
+            if len(candidates) < 12:
+                candidates.append(path)
+            else:
+                slot = random.randrange(seen)
+                if slot < 12:
+                    candidates[slot] = path
+    random.shuffle(candidates)
+    client = meta_mod.Client(timeout=3)
+    used = set()
+    emitted = set()
+    # Prefer cached artwork across the sample before making any network calls.
+    for network in ([False, True] if allow_network else [False]):
+        for path in candidates:
+            if path in emitted:
+                continue
+            try:
+                info = decrypt.probe(path)
+                row = client.preview(info.get("song_id"), info.get("mid") or "", allow_network=network)
+            except (OSError, ValueError, decrypt.DecryptError):
+                continue
+            if not row or not row.get("cover") or row["cover"] in used:
+                continue
+            used.add(row["cover"])
+            emitted.add(path)
+            reporter._emit(dict(row, event="home-cover", input=path))
+            if len(used) == 3:
+                return 0
+    return 0
 
 
 def cmd_info(paths, reporter, covers=False):
@@ -203,7 +250,29 @@ def main(argv=None):
 
     input_dir = os.path.abspath(os.path.expanduser(args.input)) if args.input else os.getcwd()
 
+    if args.home_covers:
+        return cmd_home_covers(input_dir, reporter, allow_network=not args.no_online_tags)
+
+    input_files = batch_files = None
+    if args.input_list:
+        try:
+            with open(args.input_list, encoding="utf-8") as stream:
+                manifest = json.load(stream)
+            input_files = manifest["files"]
+            batch_files = manifest.get("batch_files", input_files)
+            for paths in (input_files, batch_files):
+                if not isinstance(paths, list) or not all(isinstance(p, str) and os.path.isabs(p) for p in paths):
+                    raise ValueError("文件清单必须是绝对路径数组")
+            if not set(input_files).issubset(batch_files):
+                raise ValueError("待处理文件必须属于原始批次")
+            input_files = list(dict.fromkeys(input_files))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            reporter.log("error", "文件清单无效：%s" % exc)
+            return 1
+
     if args.info:
+        if input_files is not None:
+            return cmd_info(input_files, reporter, covers=args.covers)
         if os.path.isfile(input_dir):
             paths = [input_dir]
         elif os.path.isdir(input_dir):
@@ -216,7 +285,7 @@ def main(argv=None):
             return 1
         return cmd_info(paths, reporter, covers=args.covers)
 
-    if not os.path.isdir(input_dir):
+    if input_files is None and not os.path.isdir(input_dir):
         reporter.log("error", "输入目录不存在：%s" % input_dir)
         return 1
 
@@ -244,6 +313,8 @@ def main(argv=None):
 
     options = Options(
         input_dir=input_dir,
+        input_files=input_files,
+        batch_files=batch_files,
         output_root=args.output,
         flac_dir=args.flac_dir,
         mp3_dir=args.mp3_dir,

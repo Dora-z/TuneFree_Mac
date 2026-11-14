@@ -177,7 +177,7 @@ struct TuneFreeApp: App {
                 Button("所有版本") { NSWorkspace.shared.open(Updater.releasesURL) }
             }
             CommandGroup(replacing: .newItem) {
-                Button("打开文件夹…") { model.chooseInput() }
+                Button("打开文件或文件夹…") { model.chooseInput() }
                     .keyboardShortcut("o", modifiers: .command)
                     .disabled(model.isBusy)
             }

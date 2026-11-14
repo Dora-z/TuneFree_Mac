@@ -75,6 +75,48 @@ class PipelineTest(unittest.TestCase):
             fh.write(blob)
         return path
 
+    def test_selected_files_exclude_siblings_and_old_outputs(self):
+        selected = self._encrypt_into("selected.mflac")
+        self._encrypt_into("unselected.mflac")
+        opts = Options(input_dir=self.in_dir, input_files=[selected], online_tags=False)
+        os.makedirs(opts.flac_dir)
+        stale = os.path.join(opts.flac_dir, "old.flac")
+        shutil.copyfile(self.flac, stale)
+        events = []
+        result = job.Job(opts, on_file=events.append).run()
+        self.assertTrue(result.ok, result.to_dict())
+        self.assertEqual(result.files_found, 1)
+        self.assertEqual(result.mp3_ok, 1)
+        self.assertTrue(os.path.exists(stale))
+        self.assertEqual(os.listdir(opts.mp3_dir), ["selected.mp3"])
+        self.assertFalse(any(e.get("input", "").endswith("old.flac") for e in events))
+
+    def test_retry_preserves_duplicate_names_and_successful_output(self):
+        first = self._encrypt_into("same.mflac")
+        os.makedirs(os.path.join(self.in_dir, "nested"))
+        second = self._encrypt_into("nested/same.mflac")
+        opts = Options(input_dir=self.in_dir, input_files=[first, second],
+                       batch_files=[first, second], keep_flac=True, online_tags=False)
+        self.assertTrue(job.Job(opts).run().ok)
+        original = os.path.join(opts.mp3_dir, "same.mp3")
+        timestamp = os.stat(original).st_mtime_ns
+        os.unlink(os.path.join(opts.mp3_dir, "same (2).mp3"))
+        opts.input_files = [second]
+        opts.force = True
+        events = []
+        result = job.Job(opts, on_file=events.append).run()
+        self.assertTrue(result.ok, result.to_dict())
+        self.assertEqual(result.files_found, 1)
+        self.assertEqual(result.mp3_ok, 1)
+        self.assertEqual(os.stat(original).st_mtime_ns, timestamp)
+        self.assertTrue(os.path.exists(os.path.join(opts.mp3_dir, "same (2).mp3")))
+        self.assertEqual([e["input"] for e in events if e["event"] == "decrypt-ok"], [second])
+
+    def test_empty_selection_does_not_scan_directory(self):
+        self._encrypt_into("not-selected.mflac")
+        result = job.Job(Options(input_dir=self.in_dir, input_files=[])).run()
+        self.assertEqual(result.files_found, 0)
+
     def test_完整流程(self):
         self._encrypt_into("曲目 A.mflac")
         opts = Options(input_dir=self.in_dir, bitrate="128k")

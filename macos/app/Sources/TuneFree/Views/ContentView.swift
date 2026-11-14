@@ -7,13 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            if model.phase == .idle {
-                AuroraBackground(energy: 0)
-                    .transition(.opacity)
-            } else {
-                CoverBackdrop()
-                    .transition(.opacity)
-            }
+            Theme.ink.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 TopBar()
@@ -90,7 +84,7 @@ struct ContentView: View {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .strokeBorder(Theme.accent2, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.accent2.opacity(0.08)))
-                            .overlay(Label("松手换成这个文件夹", systemImage: "arrow.down.circle.fill")
+                            .overlay(Label("松手载入这些歌曲或文件夹", systemImage: "arrow.down.circle.fill")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.textPrimary))
                     }
@@ -147,7 +141,7 @@ struct TopBar: View {
             HStack(spacing: 8) {
                 if model.hasFFmpeg && model.hasQQLogin {
                     StatusPill(ok: true, label: "一切就绪")
-                        .help("离线解密 · 转码引擎就绪 · 已检测到 QQ音乐登录态")
+                        .help("本地解密 · 转码引擎就绪 · 已检测到 QQ音乐登录态")
                 } else {
                     if !model.hasFFmpeg { StatusPill(ok: false, label: "缺少 ffmpeg") }
                     if !model.hasQQLogin {
@@ -166,6 +160,7 @@ struct TopBar: View {
                 Image(systemName: "text.alignleft")
             }
             .buttonStyle(IconButtonStyle(active: model.showLog))
+            .accessibilityLabel("运行日志")
             .help("运行日志（⌘L）")
             .keyboardShortcut("l", modifiers: .command)
 
@@ -173,6 +168,7 @@ struct TopBar: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(IconButtonStyle(active: model.sheet == .settings))
+            .accessibilityLabel("设置")
             .help("设置（⌘,）")
         }
         .padding(.horizontal, 16)

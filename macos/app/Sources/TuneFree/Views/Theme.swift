@@ -15,7 +15,7 @@ private func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> 
 enum Theme {
     // 底色
     static let inkNS = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(0.035, 0.039, 0.067) : rgb(0.955, 0.952, 0.975)
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(0.035, 0.039, 0.067) : rgb(0.982, 0.982, 0.987)
     }
     static let ink = Color(nsColor: inkNS)
 
@@ -54,7 +54,7 @@ enum Theme {
 
     // 封面墙
     /// 侧栏底色：比背景实一点，不用毛玻璃（虚化封面背景上毛玻璃会发灰）
-    static let panel = adaptive(light: NSColor(white: 1, alpha: 0.78), dark: rgb(0.08, 0.085, 0.115, 0.82))
+    static let panel = adaptive(light: rgb(0.949, 0.935, 0.985), dark: rgb(0.10, 0.095, 0.14))
     static let panelEdge = adaptive(light: NSColor(white: 0, alpha: 0.07), dark: NSColor(white: 1, alpha: 0.07))
     /// 分段选择器里选中的那一格
     static let chipSelected = adaptive(light: NSColor(white: 1, alpha: 1), dark: NSColor(white: 1, alpha: 0.16))

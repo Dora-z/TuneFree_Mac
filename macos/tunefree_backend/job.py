@@ -118,7 +118,10 @@ class Options(object):
                  bitrate="192k", keep_flac=False, no_mp3=False, force=False,
                  jobs=1, ekey=None, verify_output=False, ffmpeg_path=None,
                  auto_ekey=True, authst=None, uin=None, tag_from_filename=True,
-                 online_tags=True, write_lrc=False, meta_cache_dir=None):
+                 online_tags=True, write_lrc=False, meta_cache_dir=None,
+                 input_files=None, batch_files=None):
+        self.input_files = list(dict.fromkeys(input_files)) if input_files is not None else None
+        self.batch_files = batch_files
         self.input_dir = os.path.abspath(os.path.expanduser(input_dir or os.getcwd()))
         root = os.path.abspath(os.path.expanduser(output_root or os.path.join(self.input_dir, "output")))
         self.output_root = root
@@ -180,6 +183,7 @@ class Job(object):
         self.result = Result()
         self._hints = {}          # 解密产物路径 → (song_id, media_mid)，转码时联网查标签用
         self._meta = None
+        self._outputs = []
 
     # ---------------------------------------------------------- 控制 ----
     def cancel(self):
@@ -194,7 +198,7 @@ class Job(object):
         result = self.result
         result.started_at = time.time()
 
-        if not os.path.isdir(opts.input_dir):
+        if opts.input_files is None and not os.path.isdir(opts.input_dir):
             self.log("输入目录不存在：%s" % opts.input_dir, "error")
             result.finished_at = time.time()
             return result
@@ -206,7 +210,7 @@ class Job(object):
         self.log("FLAC 输出：%s" % opts.flac_dir)
         self.log("MP3 输出：%s" % opts.mp3_dir)
 
-        files = scan_inputs(opts.input_dir)
+        files = opts.input_files if opts.input_files is not None else scan_inputs(opts.input_dir)
         result.files_found = len(files)
         if not files:
             self.log("没有找到 .mflac / .mgg（或 .qmcflac 等）加密文件", "warning")
@@ -234,20 +238,25 @@ class Job(object):
         total = len(files)
         used = {}   # 输出路径 → 源文件，给不同子目录里的同名歌曲去重
 
+        destinations = {}
+        for src in (opts.batch_files or files):
+            ext = decrypt.output_extension(src) or "bin"
+            stem = os.path.splitext(os.path.basename(src))[0]
+            destinations[src] = _unique_path(opts.flac_dir, stem, ext, used, src)
+
         for index, src in enumerate(files, 1):
             if self._cancel:
                 result.cancelled = True
                 break
 
             name = os.path.basename(src)
-            ext = decrypt.output_extension(src) or "bin"
-            stem = os.path.splitext(name)[0]
-            dst, deduped = _unique_path(opts.flac_dir, stem, ext, used, src)
+            dst, deduped = destinations[src]
             if deduped:
                 self.log("同名冲突，改名为 %s" % os.path.basename(dst), "warning")
 
             if os.path.exists(dst) and not opts.force:
                 result.decrypt_skipped += 1
+                self._outputs.append(dst)
                 if opts.online_tags:
                     try:
                         found = decrypt.probe(src)
@@ -276,6 +285,7 @@ class Job(object):
                               "reason": "unexpected", "message": str(exc)})
             else:
                 result.decrypted += 1
+                self._outputs.append(dst)
                 self._hints[dst] = (info.get("song_id"), info.get("mid"))
                 note = ""
                 if opts.verify_output:
@@ -302,14 +312,11 @@ class Job(object):
         opts = self.options
         result = self.result
 
-        try:
-            flac_files = sorted(f for f in os.listdir(opts.flac_dir) if f.lower().endswith(".flac"))
-            ogg_files = sorted(f for f in os.listdir(opts.flac_dir) if f.lower().endswith(".ogg"))
-        except OSError as exc:
-            self.log("读不了 FLAC 目录：%s" % exc, "error")
-            return
-
-        jobs = [(os.path.join(opts.flac_dir, f), f) for f in flac_files + ogg_files]
+        # Only this run's successful/skipped decrypt outputs may be transcoded.
+        paths = list(dict.fromkeys(self._outputs))
+        ogg_files = [p for p in paths if p.lower().endswith(".ogg")]
+        jobs = [(p, os.path.basename(p)) for p in paths
+                if p.lower().endswith((".flac", ".ogg"))]
         if not jobs:
             self.log("没有可转码的 FLAC/OGG 文件")
             return
@@ -321,7 +328,12 @@ class Job(object):
                 ffmpeg_path = ffmpeg_path or audio.require_ffmpeg()
             except audio.FFmpegMissing as exc:
                 self.log(str(exc), "error")
-                result.mp3_failed = len(jobs) if not opts.no_mp3 else len(ogg_files)
+                affected = [(src, name) for src, name in jobs if not opts.no_mp3 or src.lower().endswith(".ogg")]
+                result.mp3_failed = len(affected)
+                for src, _ in affected:
+                    result.errors.append(FileError(src, "transcode", "ffmpeg", str(exc)))
+                    self.on_file({"event": "transcode-fail", "input": src,
+                                  "reason": "ffmpeg", "message": str(exc)})
                 return
             self.log("ffmpeg：%s" % ffmpeg_path)
 

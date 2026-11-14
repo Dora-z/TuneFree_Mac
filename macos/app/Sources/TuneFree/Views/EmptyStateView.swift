@@ -2,122 +2,138 @@ import SwiftUI
 
 struct EmptyStateView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     var isTargeted: Bool
-    @State private var appear = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 20)
-
-            ZStack {
-                // 外圈光晕
-                Circle()
-                    .fill(RadialGradient(colors: [Theme.accent2.opacity(0.45), .clear],
-                                         center: .center, startRadius: 10, endRadius: 120))
-                    .frame(width: 240, height: 240)
-                    .scaleEffect(isTargeted ? 1.15 : 1)
-                    .blur(radius: 10)
-                Circle()
-                    .strokeBorder(Theme.brandDiagonal, lineWidth: 1.2)
-                    .frame(width: 128, height: 128)
-                    .opacity(0.6)
-                    .rotationEffect(.degrees(appear ? 360 : 0))
-                    .animation(.linear(duration: 18).repeatForever(autoreverses: false), value: appear)
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 112, height: 112)
-                    .overlay(Circle().strokeBorder(Theme.overlay(0.15), lineWidth: 1))
-                EqualizerBars(count: 7, active: true, barWidth: 4.5, spacing: 4)
-                    .frame(width: 56, height: 42)
-            }
-            .scaleEffect(appear ? 1 : 0.85)
-            .opacity(appear ? 1 : 0)
-
-            VStack(spacing: 12) {
-                Text("让每一首歌，回到你手里")
-                    .font(.system(size: 34, weight: .bold, design: .default))
-                    .tracking(-0.5)
-                    .foregroundStyle(
-                        LinearGradient(colors: [Theme.textPrimary, Theme.textPrimary.opacity(0.78)], startPoint: .top, endPoint: .bottom))
-                Text("把 QQ音乐下载的 .mflac / .mgg 在本机离线解密，转成任何播放器都能打开的 MP3 与 FLAC。")
-                    .font(.system(size: 14.5))
-                    .foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 460)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, 26)
-            .offset(y: appear ? 0 : 12)
-            .opacity(appear ? 1 : 0)
-
-            // 拖放区
-            VStack(spacing: 16) {
-                Image(systemName: isTargeted ? "arrow.down.circle.fill" : "folder.badge.plus")
-                    .font(.system(size: 26, weight: .light))
-                    .foregroundStyle(isTargeted ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Theme.textSecondary))
-                    .symbolEffect(.bounce, value: isTargeted)
-                Text(isTargeted ? "松手即可载入" : "把文件夹拖到这里")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Theme.textPrimary)
-                HStack(spacing: 10) {
-                    Button { model.chooseInput() } label: {
-                        Label("选择文件夹…", systemImage: "folder")
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                    .keyboardShortcut("o", modifiers: .command)
-
-                    if model.qqCacheExists {
-                        Button { model.load(AppModel.qqCacheURL) } label: {
-                            Label("打开 QQ音乐缓存", systemImage: "music.note.house")
+        GeometryReader { geometry in
+            let inset: CGFloat = geometry.size.width < 1100 ? 48 : 64
+            let contentWidth = min(geometry.size.width - inset * 2, 1240)
+            let coverWidth = min(contentWidth * 0.28, max(210, (geometry.size.height - 190) / 1.5), 320)
+            let titleSize = min(76, max(48, contentWidth * 0.062))
+            VStack(spacing: 0) {
+                Spacer(minLength: 16)
+                HStack(alignment: .center, spacing: 56) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("让喜欢的歌，\n随处可听。")
+                            .font(.system(size: titleSize, weight: .heavy))
+                            .tracking(-1.5)
+                            .lineSpacing(4)
+                            .foregroundStyle(Theme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 28)
+                        Text("将 QQ音乐下载的 .mflac / .mgg 等文件\n转换为 MP3 或无损音频。")
+                            .font(.system(size: geometry.size.width < 1100 ? 17 : 20))
+                            .lineSpacing(6)
+                            .foregroundStyle(Theme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 36)
+                        HStack(spacing: 12) {
+                            Button { model.chooseInput() } label: {
+                                Text("选择文件或文件夹…")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(SolidButtonStyle(height: 48))
+                            .keyboardShortcut("o", modifiers: .command)
+                            if model.qqCacheExists {
+                                Button { model.load(AppModel.qqCacheURL) } label: {
+                                    Text("打开 QQ音乐下载目录")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(GhostButtonStyle(height: 48))
+                                .overlay(RoundedRectangle(cornerRadius: 11)
+                                    .strokeBorder(Theme.textSecondary, lineWidth: 1))
+                            }
                         }
-                        .buttonStyle(GhostButtonStyle())
+                        .padding(.bottom, 22)
+                        Label(isTargeted ? "松手即可添加歌曲" : "也可以将歌曲或文件夹拖到这里",
+                              systemImage: "arrow.down.doc")
+                            .font(.system(size: 13))
+                            .foregroundStyle(isTargeted ? Theme.accent2 : Theme.textSecondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("你的音乐一角")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                        album(0, side: coverWidth)
+                        HStack(alignment: .top, spacing: 18) {
+                            album(1, side: (coverWidth - 18) / 2)
+                            album(2, side: (coverWidth - 18) / 2)
+                        }
+                    }
+                    .frame(width: coverWidth)
+                }
+                Spacer(minLength: 24)
+                Spacer().frame(height: 28)
+            }
+            .frame(width: contentWidth)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                if isTargeted {
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(Theme.accent2, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                        .padding(12)
+                        .allowsHitTesting(false)
                 }
             }
-            .frame(maxWidth: 520)
-            .padding(.vertical, 30)
-            .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Theme.overlay(isTargeted ? 0.07 : 0.025))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(isTargeted ? AnyShapeStyle(Theme.brandDiagonal) : AnyShapeStyle(Theme.overlay(0.14)),
-                                  style: StrokeStyle(lineWidth: isTargeted ? 1.6 : 1, dash: isTargeted ? [] : [6, 6]))
-            }
-            .padding(.top, 34)
-            .offset(y: appear ? 0 : 18)
-            .opacity(appear ? 1 : 0)
-
-            HStack(spacing: 26) {
-                feature("lock.shield", "完全离线", "不上传任何文件")
-                feature("bolt", "约 450 MB/s", "解密几乎瞬间完成")
-                feature("tag", "自动补标签", "歌手 · 歌名不丢失")
-            }
-            .padding(.top, 34)
-            .opacity(appear ? 1 : 0)
-
-            Spacer(minLength: 20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isTargeted)
-        .onAppear {
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.85).delay(0.05)) { appear = true }
+         .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            model.loadHomeCoversIfNeeded()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(12)) }
+                catch { return }
+                guard !Task.isCancelled else { return }
+                model.loadHomeCoversIfNeeded(refresh: true)
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isTargeted)
     }
 
-    private func feature(_ symbol: String, _ title: String, _ sub: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(Theme.accent.opacity(0.12)))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                Text(sub).font(.system(size: 11)).foregroundStyle(Theme.textTertiary)
+    private func album(_ index: Int, side: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+          VStack(alignment: .leading, spacing: 8) {
+            sleeve(index, side: side)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(index < model.homeCovers.count ? model.homeCovers[index].displayTitle : "等待发现好音乐")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(index < model.homeCovers.count ? model.homeCovers[index].displayArtist : "QQ音乐下载目录")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .lineLimit(1)
+        }
+          .frame(width: side, alignment: .leading)
+          .id(index < model.homeCovers.count ? model.homeCovers[index].id : "placeholder-\(index)")
+          .transition(.opacity)
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.9),
+                   value: model.homeCovers.map(\.id))
+    }
+
+    @ViewBuilder
+    private func sleeve(_ index: Int, side: CGFloat) -> some View {
+        let tracks = model.homeCovers
+        Group {
+            if index < tracks.count {
+                CoverArt(track: tracks[index])
+                    .help([tracks[index].displayTitle, tracks[index].displayArtist].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .accessibilityLabel("封面：\(tracks[index].displayTitle)")
+            } else {
+                ZStack {
+                    Theme.panel
+                    Image(systemName: "opticaldisc.fill")
+                        .font(.system(size: side * 0.55, weight: .ultraLight))
+                        .foregroundStyle(Theme.accent2.opacity(0.35))
+                }
+                .accessibilityLabel("默认唱片封面")
             }
         }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.coverEdge, lineWidth: 0.6))
     }
 }

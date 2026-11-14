@@ -90,7 +90,7 @@ struct SettingsSheet: View {
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
             HStack {
-                Text("全程本地处理，不上传你的歌曲")
+                Text("本地解密，不上传歌曲；标签与密钥可能联网获取")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
                 Spacer()

@@ -6,19 +6,20 @@ struct WallSidebar: View {
     @State private var showAdvanced = false
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             ViewThatFits(in: .vertical) {
                 settings
                 ScrollView { settings }.scrollIndicators(.never)
             }
-            .card()
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
+            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.horizontal, 18)
 
             RunPanel()
                 .padding(18)
-                .card()
         }
+        .frame(maxHeight: .infinity)
+        .card()
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.outputMode)
     }
 
@@ -96,7 +97,7 @@ struct WallSidebar: View {
 
                     if showAdvanced {
                         VStack(spacing: 0) {
-                            ToggleRow(title: "联网补全标签", detail: "封面、专辑、年份、歌词", isOn: $model.onlineTags)
+                            ToggleRow(title: "联网补全标签", detail: "向 QQ音乐查询封面、专辑、歌词", isOn: $model.onlineTags)
                             ToggleRow(title: "文件名补标签", detail: "从「歌手-歌名」回填", isOn: $model.fillTags)
                             ToggleRow(title: "另存歌词文件", detail: ".lrc，车机 / 播放器同步显示", isOn: $model.writeLrc)
                             ToggleRow(title: "容器校验", detail: "逐页 CRC，确保无损坏", isOn: $model.verify)
@@ -187,7 +188,7 @@ private struct RunPanel: View {
     private var ring: some View {
         let finished = model.phase == .finished
         let summary = model.summary
-        let ok = (summary?.failed ?? 0) == 0 && !(summary?.cancelled ?? false)
+        let ok = (summary?.failed ?? 0) == 0 && (summary?.errors.isEmpty ?? true) && !(summary?.cancelled ?? false)
         ZStack {
             Circle().stroke(Theme.overlay(0.09), lineWidth: 6)
             Circle()
@@ -228,7 +229,7 @@ private struct RunPanel: View {
             guard let s = model.summary else { return "完成" }
             if s.cancelled { return "已停止" }
             if s.found == 0 { return "没有可处理的文件" }
-            if s.failed == 0 && s.errors.isEmpty { return "全部完成" }
+            if s.failed == 0 && s.errors.isEmpty { return model.retrying ? "重试完成" : "全部完成" }
             if s.succeeded == 0 { return "没有成功的歌曲" }
             return "有 \(s.failed) 首没成功"
         default:
@@ -279,6 +280,20 @@ private struct RunPanel: View {
             .keyboardShortcut(".", modifiers: .command)
         case .finished:
             VStack(spacing: 8) {
+                if model.failedCount > 0 {
+                    Button { model.retryFailed() } label: {
+                        Label("仅重试失败项（\(model.failedCount)）", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(SolidButtonStyle())
+                    .help("重新生成失败歌曲的输出，其他歌曲保持不变")
+                }
+                if let s = model.summary, !s.errors.isEmpty {
+                    Button { showIssues = true } label: {
+                        Label("查看原因与解决办法（\(s.errors.count)）", systemImage: "exclamationmark.triangle")
+                    }
+                    .buttonStyle(GhostButtonStyle(height: 32))
+                    .popover(isPresented: $showIssues, arrowEdge: .top) { IssuesList(summary: s) }
+                }
                 Button { model.revealOutput() } label: {
                     Label("在 Finder 中打开", systemImage: "arrow.up.forward.app")
                 }
@@ -289,14 +304,7 @@ private struct RunPanel: View {
                         .keyboardShortcut(.return, modifiers: .command)
                     Button("新的一批") { model.reset() }
                         .buttonStyle(GhostButtonStyle(height: 32))
-                    if let s = model.summary, !s.errors.isEmpty {
-                        Button { showIssues = true } label: {
-                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.gold)
-                        }
-                        .buttonStyle(GhostButtonStyle(height: 32))
-                        .help("\(s.errors.count) 条问题")
-                        .popover(isPresented: $showIssues, arrowEdge: .top) { IssuesList(summary: s) }
-                    }
+
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -308,7 +316,7 @@ private struct RunPanel: View {
                 .buttonStyle(SolidButtonStyle())
                 .disabled(model.tracks.isEmpty || model.phase == .scanning || model.phase == .idle)
                 .keyboardShortcut(.return, modifiers: .command)
-                Text("⌘↩ 开始 · 全程本地处理，不上传歌曲")
+                Text("⌘↩ 开始 · 本地解密，不上传歌曲")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -345,6 +353,9 @@ private struct IssuesList: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("\(summary.errors.count) 条问题")
                     .font(.system(size: 13, weight: .semibold))
+                Text("密钥问题：打开并登录 QQ音乐后重试。权限问题：在设置中检查目录访问权限，或更换导出位置。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 ForEach(Array(summary.errors.enumerated()), id: \.offset) { _, e in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(e.path.isEmpty ? "后端" : URL(fileURLWithPath: e.path).lastPathComponent)
@@ -430,11 +441,13 @@ struct ToggleRow: View {
                 Text(detail).font(.system(size: 10.5)).foregroundStyle(Theme.textTertiary)
             }
             Spacer()
-            Toggle("", isOn: $isOn)
+            Toggle(title, isOn: $isOn)
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .tint(Theme.accent2)
                 .labelsHidden()
+                .accessibilityLabel(title)
+                .accessibilityHint(detail)
         }
         .padding(.vertical, 6)
     }

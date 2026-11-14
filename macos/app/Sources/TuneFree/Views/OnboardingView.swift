@@ -22,7 +22,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     section("三步就能用") {
                         VStack(spacing: 8) {
-                            step(1, "folder.badge.plus", "选歌", "把放着 .mflac / .mgg 的文件夹拖进窗口，或点「打开 QQ音乐缓存」直接载入下载目录。")
+                            step(1, "folder.badge.plus", "选歌", "把 .mflac / .mgg 文件或文件夹拖进窗口，也可多选导入；点「打开 QQ音乐下载目录」可载入下载目录。")
                             step(2, "slider.horizontal.3", "选格式", "右侧选导出位置、输出格式（仅 MP3 / MP3 + 无损 / 仅无损）和 MP3 音质。")
                             step(3, "sparkles", "开始转换", "点「开始转换」（⌘↩），完成后点「在 Finder 中打开」就是成品。")
                         }
