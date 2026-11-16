@@ -52,8 +52,8 @@ struct UpdateView: View {
                         .padding(14)
                 }
                 .frame(maxHeight: 260)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.overlay(0.04)))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
+                .background(Theme.roundedShape.fill(Theme.overlay(0.04)))
+                .overlay(Theme.roundedShape.strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
             }
 
             installStatus(release)

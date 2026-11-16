@@ -52,8 +52,8 @@ struct OnboardingView: View {
                         .lineSpacing(3)
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.gold.opacity(0.07)))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.gold.opacity(0.22), lineWidth: 0.8))
+                        .background(Theme.roundedShape.fill(Theme.gold.opacity(0.07)))
+                        .overlay(Theme.roundedShape.strokeBorder(Theme.gold.opacity(0.22), lineWidth: 0.8))
                     }
                 }
                 .padding(.horizontal, 32)
@@ -158,7 +158,7 @@ struct OnboardingView: View {
     private func step(_ index: Int, _ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.brandDiagonal)
+                Theme.roundedShape.fill(Theme.brandDiagonal)
                 Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
             }
             .frame(width: 34, height: 34)
@@ -170,8 +170,8 @@ struct OnboardingView: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.overlay(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.overlay(0.07), lineWidth: 0.8))
+        .background(Theme.roundedShape.fill(Theme.overlay(0.04)))
+        .overlay(Theme.roundedShape.strokeBorder(Theme.overlay(0.07), lineWidth: 0.8))
     }
 
     private func note(_ symbol: String, _ text: String) -> some View {

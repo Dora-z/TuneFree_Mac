@@ -205,18 +205,18 @@ struct CoverWallView: View {
                     .padding(.vertical, 5)
                     .background {
                         if filter == f {
-                            Capsule().fill(Theme.chipSelected)
+                            Theme.roundedShape.fill(Theme.chipSelected)
                                 .shadow(color: Theme.shadow.opacity(0.5), radius: 2, y: 1)
                         }
                     }
-                    .contentShape(Capsule())
+                    .contentShape(Theme.roundedShape)
                 }
                 .buttonStyle(.plain)
                 .opacity(f == .failed && model.failedCount == 0 ? 0.45 : 1)
             }
         }
         .padding(3)
-        .background(Capsule().fill(Theme.well))
+        .background(Theme.roundedShape.fill(Theme.well))
     }
 
     private var emptyFolder: some View {
@@ -254,8 +254,8 @@ struct CoverTile: View {
                 stateOverlay
             }
             .aspectRatio(1, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .clipShape(Theme.roundedShape)
+            .overlay(Theme.roundedShape
                 .strokeBorder(Theme.coverEdge, lineWidth: 0.6))
             .overlay(alignment: .bottomTrailing) { badge.padding(7) }
             .shadow(color: Theme.coverShadow, radius: hover ? 14 : 8, y: hover ? 8 : 4)
@@ -483,11 +483,11 @@ private struct SkeletonTile: View {
     @State private var shimmer = false
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            Theme.roundedShape
                 .fill(Theme.overlay(0.07))
                 .aspectRatio(1, contentMode: .fit)
-            RoundedRectangle(cornerRadius: 4).fill(Theme.overlay(0.07)).frame(width: 90, height: 10)
-            RoundedRectangle(cornerRadius: 4).fill(Theme.overlay(0.05)).frame(width: 60, height: 8)
+            Theme.roundedShape.fill(Theme.overlay(0.07)).frame(width: 90, height: 10)
+            Theme.roundedShape.fill(Theme.overlay(0.05)).frame(width: 60, height: 8)
         }
         .opacity(shimmer ? 0.5 : 1)
         .animation(.easeInOut(duration: 0.9).repeatForever(), value: shimmer)

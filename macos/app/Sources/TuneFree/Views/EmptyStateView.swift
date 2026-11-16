@@ -42,7 +42,7 @@ struct EmptyStateView: View {
                                         .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(GhostButtonStyle(height: 48))
-                                .overlay(RoundedRectangle(cornerRadius: 11)
+                                .overlay(Theme.roundedShape
                                     .strokeBorder(Theme.textSecondary, lineWidth: 1))
                             }
                         }
@@ -72,7 +72,7 @@ struct EmptyStateView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if isTargeted {
-                    RoundedRectangle(cornerRadius: 16)
+                    Theme.roundedShape
                         .strokeBorder(Theme.accent2, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                         .padding(12)
                         .allowsHitTesting(false)
@@ -133,7 +133,7 @@ struct EmptyStateView: View {
             }
         }
         .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.coverEdge, lineWidth: 0.6))
+        .clipShape(Theme.roundedShape)
+        .overlay(Theme.roundedShape.strokeBorder(Theme.coverEdge, lineWidth: 0.6))
     }
 }

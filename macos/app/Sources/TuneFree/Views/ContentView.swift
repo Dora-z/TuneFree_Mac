@@ -81,9 +81,9 @@ struct ContentView: View {
             CoverWallView()
                 .overlay {
                     if dropTargeted && !model.isBusy {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        Theme.roundedShape
                             .strokeBorder(Theme.accent2, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.accent2.opacity(0.08)))
+                            .background(Theme.roundedShape.fill(Theme.accent2.opacity(0.08)))
                             .overlay(Label("松手载入这些歌曲或文件夹", systemImage: "arrow.down.circle.fill")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.textPrimary))
@@ -113,7 +113,7 @@ struct TopBar: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .background(Theme.roundedShape.strokeBorder(Theme.hairline, lineWidth: 1))
             }
 
             if let release = updater.badge {
@@ -126,9 +126,9 @@ struct TopBar: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Theme.brandDiagonal))
+                    .background(Theme.roundedShape.fill(Theme.brandDiagonal))
                     .shadow(color: Theme.accent2.opacity(0.5), radius: 8)
-                    .contentShape(Capsule())
+                    .contentShape(Theme.roundedShape)
                 }
                 .buttonStyle(.plain)
                 .help("有新版本可以下载")
@@ -181,7 +181,7 @@ struct LogoMark: View {
         GeometryReader { geo in
             let s = geo.size.width
             ZStack {
-                RoundedRectangle(cornerRadius: s * 0.28, style: .continuous)
+                Theme.roundedShape
                     .fill(Theme.brandDiagonal)
                 HStack(spacing: s * 0.09) {
                     ForEach([0.38, 0.62, 0.46], id: \.self) { h in
@@ -205,7 +205,7 @@ struct DiskAccessBanner: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Theme.gold)
                 .frame(width: 38, height: 38)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.gold.opacity(0.14)))
+                .background(Theme.roundedShape.fill(Theme.gold.opacity(0.14)))
             VStack(alignment: .leading, spacing: 3) {
                 Text("请给 TuneFree 打开「完全磁盘访问权限」")
                     .font(.system(size: 13, weight: .semibold))
@@ -238,8 +238,8 @@ struct DiskAccessBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.gold.opacity(0.08)))
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1))
+        .background(Theme.roundedShape.fill(Theme.gold.opacity(0.08)))
+        .background(Theme.roundedShape.fill(.ultraThinMaterial))
+        .overlay(Theme.roundedShape.strokeBorder(Theme.gold.opacity(0.35), lineWidth: 1))
     }
 }

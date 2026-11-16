@@ -13,6 +13,10 @@ private func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> 
 }
 
 enum Theme {
+    /// 全界面共用的连续圆角，与系统版本无关。
+    static let cornerRadius: CGFloat = 12
+    static var roundedShape: InterfaceRoundedRectangle { InterfaceRoundedRectangle() }
+
     // 底色
     static let inkNS = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(0.035, 0.039, 0.067) : rgb(0.982, 0.982, 0.987)
@@ -69,24 +73,43 @@ enum Theme {
                                               startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
+/// 小控件的半径最多为短边的四分之一，保留直边，避免变成胶囊或圆形。
+/// 填充、裁切和描边共用轮廓；描边内缩时同步减小半径。
+struct InterfaceRoundedRectangle: InsettableShape {
+    private var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(Theme.cornerRadius, min(rect.width, rect.height) * 0.25)
+        let bounds = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        guard bounds.width > 0, bounds.height > 0 else { return Path() }
+        return RoundedRectangle(cornerRadius: max(0, radius - insetAmount), style: .continuous)
+            .path(in: bounds)
+    }
+
+    func inset(by amount: CGFloat) -> Self {
+        var shape = self
+        shape.insetAmount += amount
+        return shape
+    }
+}
+
 // MARK: - 玻璃卡片
 
 struct GlassCard: ViewModifier {
-    var radius: CGFloat = 22
     var padding: CGFloat = 0
     func body(content: Content) -> some View {
         content
             .padding(padding)
             .background {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                Theme.roundedShape
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        Theme.roundedShape
                             .fill(Theme.overlay(0.025))
                     )
             }
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                Theme.roundedShape
                     .strokeBorder(
                         LinearGradient(colors: [Theme.glassEdgeTop, Theme.overlay(0.04), Theme.glassEdgeBottom],
                                        startPoint: .topLeading, endPoint: .bottomTrailing),
@@ -97,8 +120,8 @@ struct GlassCard: ViewModifier {
 }
 
 extension View {
-    func glass(radius: CGFloat = 22, padding: CGFloat = 0) -> some View {
-        modifier(GlassCard(radius: radius, padding: padding))
+    func glass(padding: CGFloat = 0) -> some View {
+        modifier(GlassCard(padding: padding))
     }
 }
 
@@ -116,13 +139,13 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: height)
             .background {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(tint)
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    Theme.roundedShape.fill(tint)
+                    Theme.roundedShape
                         .fill(LinearGradient(colors: [.white.opacity(0.28), .clear],
                                              startPoint: .top, endPoint: .center))
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .overlay(Theme.roundedShape
                 .strokeBorder(.white.opacity(0.25), lineWidth: 0.8))
             .shadow(color: Theme.accent2.opacity(enabled ? 0.45 : 0), radius: 18, y: 8)
             .opacity(enabled ? 1 : 0.4)
@@ -141,9 +164,9 @@ struct GhostButtonStyle: ButtonStyle {
             .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, 14)
             .frame(minHeight: height)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .background(Theme.roundedShape
                 .fill(Theme.overlay(configuration.isPressed ? 0.16 : (hover ? 0.11 : 0.07))))
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .overlay(Theme.roundedShape
                 .strokeBorder(Theme.overlay(0.1), lineWidth: 0.8))
             .onHover { hover = $0 }
             .animation(.easeOut(duration: 0.15), value: hover)
@@ -158,7 +181,7 @@ struct IconButtonStyle: ButtonStyle {
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(active ? Theme.accent : Theme.textSecondary)
             .frame(width: 32, height: 28)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .background(Theme.roundedShape
                 .fill(Theme.overlay(active ? 0.12 : (hover ? 0.08 : 0))))
             .onHover { hover = $0 }
     }
@@ -181,8 +204,8 @@ struct StatusPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(Theme.overlay(0.06)))
-        .overlay(Capsule().strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
+        .background(Theme.roundedShape.fill(Theme.overlay(0.06)))
+        .overlay(Theme.roundedShape.strokeBorder(Theme.overlay(0.08), lineWidth: 0.8))
     }
 }
 
@@ -196,8 +219,8 @@ struct Badge: View {
             .foregroundStyle(color)
             .padding(.horizontal, 6)
             .padding(.vertical, 2.5)
-            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(color.opacity(0.14)))
-            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(color.opacity(0.28), lineWidth: 0.6))
+            .background(Theme.roundedShape.fill(color.opacity(0.14)))
+            .overlay(Theme.roundedShape.strokeBorder(color.opacity(0.28), lineWidth: 0.6))
     }
 }
 

@@ -168,7 +168,7 @@ struct SettingsSheet: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.well))
+            .background(Theme.roundedShape.fill(Theme.well))
 
             Text("基于 zksbx/TuneFree（Windows 版）· MIT 协议")
                 .font(.system(size: 10.5))
@@ -278,9 +278,9 @@ struct SettingsSheet: View {
     // MARK: 小部件
 
     private var card: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        Theme.roundedShape
             .fill(Theme.panel)
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.panelEdge, lineWidth: 0.8))
+            .overlay(Theme.roundedShape.strokeBorder(Theme.panelEdge, lineWidth: 0.8))
     }
 
     private var divider: some View {

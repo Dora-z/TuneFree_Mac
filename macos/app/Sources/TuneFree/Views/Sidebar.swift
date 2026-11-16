@@ -50,7 +50,7 @@ struct WallSidebar: View {
                         }
                         .padding(.horizontal, 11)
                         .padding(.vertical, 9)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.well))
+                        .background(Theme.roundedShape.fill(Theme.well))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -175,7 +175,7 @@ private struct RunPanel: View {
                     metric(duration(s.elapsed), "用时", Theme.textPrimary)
                 }
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.well))
+                .background(Theme.roundedShape.fill(Theme.well))
             }
 
             buttons
@@ -416,9 +416,9 @@ private struct FormatPicker: View {
                     }
                     .foregroundStyle(on ? Theme.accent2 : Theme.textSecondary)
                     .frame(maxWidth: .infinity, minHeight: 58)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .background(Theme.roundedShape
                         .fill(on ? Theme.accent2.opacity(0.12) : Theme.well))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .overlay(Theme.roundedShape
                         .strokeBorder(on ? Theme.accent2.opacity(0.55) : .clear, lineWidth: 1.2))
                     .contentShape(Rectangle())
                 }
@@ -471,7 +471,7 @@ struct PillPicker<T: Hashable>: View {
                         .frame(maxWidth: .infinity, minHeight: 24)
                         .background {
                             if selection == opt {
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                Theme.roundedShape
                                     .fill(Theme.chipSelected)
                                     .shadow(color: Theme.shadow.opacity(0.5), radius: 2, y: 1)
                                     .matchedGeometryEffect(id: "pill", in: ns)
@@ -483,7 +483,7 @@ struct PillPicker<T: Hashable>: View {
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.well))
+        .background(Theme.roundedShape.fill(Theme.well))
     }
 }
 
@@ -498,7 +498,7 @@ struct SolidButtonStyle: ButtonStyle {
             .font(.system(size: 13.5, weight: .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: height)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(fill))
+            .background(Theme.roundedShape.fill(fill))
             .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .brightness(configuration.isPressed ? -0.06 : 0)
@@ -510,8 +510,8 @@ private extension View {
     /// 侧栏的卡片底
     func card() -> some View {
         self
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.panelEdge, lineWidth: 0.8))
+            .background(Theme.roundedShape.fill(Theme.panel))
+            .overlay(Theme.roundedShape.strokeBorder(Theme.panelEdge, lineWidth: 0.8))
             .shadow(color: Theme.shadow.opacity(0.5), radius: 16, y: 8)
     }
 }

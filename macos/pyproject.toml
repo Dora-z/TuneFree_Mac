@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tunefree-backend"
-version = "3.1.2"
+version = "3.2.2"
 description = "TuneFree macOS 后端：解密 QQ音乐 mflac/mgg 并转 MP3，无需 QQ音乐客户端"
 requires-python = ">=3.9"
 license = { text = "MIT" }
